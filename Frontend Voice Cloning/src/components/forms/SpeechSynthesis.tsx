@@ -22,13 +22,6 @@ interface SpeechSynthesisProps {
   className?: string;
 }
 
-// Sample mock voices for demo
-const mockVoices: Voice[] = [
-  { id: 'voice_demo_1', name: 'Professional Voice', audioUrl: '/demo-audio-1.mp3' },
-  { id: 'voice_demo_2', name: 'Friendly Narrator', audioUrl: '/demo-audio-2.mp3' },
-  { id: 'voice_demo_3', name: 'News Anchor', audioUrl: '/demo-audio-3.mp3' }
-];
-
 // Sample texts for different languages
 const sampleTexts = {
   english: "Hello, this is a sample text for speech synthesis. The technology can convert this text into natural-sounding speech.",
@@ -37,7 +30,7 @@ const sampleTexts = {
 };
 
 export default function SpeechSynthesis({ 
-  voices = mockVoices, 
+  voices: propVoices,
   onSynthesisComplete,
   className = "" 
 }: SpeechSynthesisProps) {
@@ -47,19 +40,45 @@ export default function SpeechSynthesis({
   const [isPlaying, setIsPlaying] = useState(false);
   const [synthesizedAudio, setSynthesizedAudio] = useState<string>('');
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const [voices, setVoices] = useState<Voice[]>(propVoices || []);
+  const [isLoadingVoices, setIsLoadingVoices] = useState(false);
   
   const { toast } = useToast();
 
   useEffect(() => {
-    // Initialize with first sample text
-    setInputText(sampleTexts.english);
+    // Don't set default text - let user type their own
+    // Load voices from backend
+    loadVoices();
   }, []);
+
+  const loadVoices = async () => {
+    setIsLoadingVoices(true);
+    try {
+      const response = await fetch('http://localhost:5000/api/voices');
+      if (response.ok) {
+        const data = await response.json();
+        const loadedVoices = data.voices.map((v: any) => ({
+          id: v.id,
+          name: v.name,
+          audioUrl: v.path
+        }));
+        setVoices(loadedVoices);
+        console.log('Loaded voices:', loadedVoices); // Debug log
+      }
+    } catch (error) {
+      console.error('Failed to load voices:', error);
+    } finally {
+      setIsLoadingVoices(false);
+    }
+  };
 
   const handleSampleTextSelect = (type: keyof typeof sampleTexts) => {
     setInputText(sampleTexts[type]);
   };
 
   const handleSynthesize = async () => {
+    console.log('Synthesize clicked - Voice:', selectedVoice, 'Text:', inputText); // Debug log
+    
     if (!inputText.trim()) {
       toast({
         title: "No text provided",
@@ -81,13 +100,38 @@ export default function SpeechSynthesis({
     setIsSynthesizing(true);
 
     try {
-      // Simulate synthesis process (replace with actual API call)
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Call backend API for synthesis
+      const response = await fetch('http://localhost:5000/api/synthesize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          voice_id: selectedVoice,
+          text: inputText
+        })
+      });
 
-      // For demo, return a mock audio URL (in real implementation, this would be the synthesized audio)
-      const mockAudioUrl = `data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBUCd3/PJfywFKXzL7t2HQQwZZqnn7qNMFAtAo+LUtGcfBD2Y3fDAfS0FAP`;
-      setSynthesizedAudio(mockAudioUrl);
-      onSynthesisComplete?.(mockAudioUrl);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to synthesize speech');
+      }
+
+      const result = await response.json();
+      
+      // Get the audio file URL from backend with cache busting
+      const audioUrl = `http://localhost:5000${result.audio_url}?t=${Date.now()}`;
+      
+      // Reset audio element to force reload
+      if (audioElement) {
+        audioElement.pause();
+        audioElement.src = '';
+        setAudioElement(null);
+      }
+      
+      setSynthesizedAudio(audioUrl);
+      setIsPlaying(false);
+      onSynthesisComplete?.(audioUrl);
 
       toast({
         title: "Synthesis complete!",
@@ -98,7 +142,7 @@ export default function SpeechSynthesis({
       console.error('Synthesis error:', error);
       toast({
         title: "Synthesis failed",
-        description: "There was an error generating the speech. Please try again.",
+        description: error instanceof Error ? error.message : "There was an error generating the speech. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -161,7 +205,10 @@ export default function SpeechSynthesis({
         {/* Voice Selection */}
         <div className="space-y-2">
           <Label htmlFor="voice-select">Select Voice</Label>
-          <Select value={selectedVoice} onValueChange={setSelectedVoice}>
+          <Select value={selectedVoice} onValueChange={(value) => {
+            console.log('Voice selected:', value); // Debug log
+            setSelectedVoice(value);
+          }}>
             <SelectTrigger className="bg-surface border-border">
               <SelectValue placeholder="Choose a voice" />
             </SelectTrigger>
@@ -193,6 +240,8 @@ export default function SpeechSynthesis({
             onChange={(e) => setInputText(e.target.value)}
             className="min-h-[120px] bg-surface border-border hindi-text"
             maxLength={1000}
+            autoComplete="off"
+            spellCheck={false}
           />
           <div className="text-sm text-muted-foreground text-right">
             {inputText.length}/1000 characters
@@ -252,6 +301,11 @@ export default function SpeechSynthesis({
             >
               {isSynthesizing ? 'Synthesizing...' : 'Generate Speech'}
             </Button>
+            {/* Debug info */}
+            <div className="text-xs text-muted-foreground text-center">
+              {!selectedVoice && <span>⚠ No voice selected</span>}
+              {!inputText.trim() && <span>⚠ No text entered</span>}
+            </div>
           </div>
         </div>
 

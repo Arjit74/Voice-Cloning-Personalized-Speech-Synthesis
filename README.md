@@ -1,35 +1,92 @@
 # Real-Time Voice Cloning (RTVC)
 
-A complete PyTorch implementation of real-time voice cloning that can synthesize speech in anyone's voice from just a few seconds of audio reference.
+A complete full-stack voice cloning application with React frontend and PyTorch backend that can synthesize speech in anyone's voice from just a few seconds of audio reference.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
+[![React](https://img.shields.io/badge/React-18.0+-61dafb.svg)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ## Features
 
+- **Full Stack Application**: Modern React UI + Flask API + PyTorch backend
+- **Voice Enrollment**: Record or upload voice samples directly in the browser
+- **Speech Synthesis**: Generate cloned speech with intuitive interface
 - **Voice Cloning**: Clone any voice with just 3-10 seconds of audio
 - **Real-Time Generation**: Generate speech at 2-3x real-time speed on CPU
 - **High Quality**: Natural-sounding synthetic speech using state-of-the-art models
-- **Easy to Use**: Simple Python script - just edit voice path and text
+- **Easy to Use**: Beautiful UI with 3D visualizations and audio waveforms
 - **Multiple Formats**: Supports WAV, MP3, M4A, FLAC input audio
+- **Multi-Language**: Supports English and Hindi text-to-speech
 
 ## Table of Contents
 
 - [Demo](#demo)
+- [Quick Start (Full Stack)](#quick-start-full-stack)
 - [How It Works](#how-it-works)
 - [Installation](#installation)
-- [Quick Start](#quick-start)
 - [Project Structure](#project-structure)
 - [Usage Examples](#usage-examples)
+- [API Documentation](#api-documentation)
 - [Troubleshooting](#troubleshooting)
 - [Technical Details](#technical-details)
 - [Credits](#credits)
 
 ## Demo
 
-Input: 5 seconds of reference audio + "Hello, this is a cloned voice!"
-Output: Synthetic speech in the reference voice
+**Frontend UI**: Modern React interface with 3D visualizations
+**Voice Enrollment**: Record/upload voice samples → Backend saves to database
+**Speech Synthesis**: Select voice + Enter text → Backend generates cloned speech
+**Playback**: Listen to generated audio directly in browser or download
+
+## Quick Start (Full Stack)
+
+### Option 1: Using the Startup Script (Easiest)
+
+```powershell
+# Windows PowerShell
+cd rtvc
+.\start_app.ps1
+```
+
+This will:
+1. Start the Backend API server (port 5000)
+2. Start the Frontend dev server (port 8080)
+3. Open your browser to http://localhost:8080
+
+### Option 2: Manual Start
+
+**Terminal 1 - Backend API:**
+```bash
+cd rtvc
+python api_server.py
+```
+
+**Terminal 2 - Frontend:**
+```bash
+cd "rtvc/Frontend Voice Cloning"
+npm run dev
+```
+
+Then open http://localhost:8080 in your browser.
+
+### Using the Application
+
+1. **Enroll a Voice**:
+   - Go to "Voice Enrollment" section
+   - Enter a voice name
+   - Record audio (3-10 seconds) or upload a file
+   - Click "Enroll Voice"
+
+2. **Generate Speech**:
+   - Go to "Speech Synthesis" section
+   - Select your enrolled voice
+   - Enter text to synthesize
+   - Click "Generate Speech"
+   - Play or download the result
+
+For detailed integration information, see [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md).
 
 ## How It Works
 
@@ -144,8 +201,6 @@ Edit the paths and text inside the script before running.
 rtvc/
 ├── clone_my_voice.py          # Simple script - EDIT THIS to clone your voice!
 ├── run_cli.py                 # Command-line interface
-├── run_voice_cloning.py       # Advanced runner with validation
-├── HOW_TO_RUN.md              # Detailed usage guide
 │
 ├── encoder/                   # Speaker Encoder Module
 │   ├── __init__.py

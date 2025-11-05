@@ -11,24 +11,16 @@ from pathlib import Path
 import sys
 from run_cli import synthesize
 
-# ============================================================================
-# EDIT THESE SETTINGS
-# ============================================================================
-
-# Your voice sample file (WAV, MP3, etc.)
-VOICE_FILE = r"sample\Recording.mp3"
+# Your voice sample file 
+VOICE_FILE = r"sample\Voice_Recording.mp3"
 
 # The text you want to be spoken in your voice
 TEXT_TO_CLONE = """
-This is a text which we would like to clone. Hurray!!
+This is a test text which I am cloning for my voice is amazing and perfect. We a most version of it.
 """
 
-# Where to save the output (optional - default is outputs/cloned_voice.wav)
-OUTPUT_FILE = r"outputs\cloned_voice.wav"
-
-# ============================================================================
-# NO NEED TO EDIT BELOW THIS LINE
-# ============================================================================
+# Where to save the output
+OUTPUT_FILE = r"outputs\cloned_voice1.wav"
 
 def print_header():
     """Print a nice header"""

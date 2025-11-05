@@ -64,11 +64,33 @@ export default function VoiceEnrollment({ onEnrollmentComplete, className = "" }
     setIsUploading(true);
 
     try {
-      // Simulate enrollment process (replace with actual API call)
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Prepare form data for API call
+      const formData = new FormData();
+      formData.append('voice_name', voiceName);
+      
+      if (selectedFile) {
+        formData.append('audio', selectedFile);
+      } else if (recordedAudio) {
+        // Convert blob to file
+        const file = new File([recordedAudio.blob], `${voiceName}.wav`, { type: 'audio/wav' });
+        formData.append('audio', file);
+      }
+
+      // Call backend API
+      const response = await fetch('http://localhost:5000/api/enroll', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to enroll voice');
+      }
+
+      const result = await response.json();
 
       const voiceData = {
-        id: `voice_${Date.now()}`,
+        id: result.voice_id,
         name: voiceName,
         audioData: selectedFile || recordedAudio?.blob,
         audioUrl: selectedFile ? URL.createObjectURL(selectedFile) : recordedAudio?.url,
@@ -91,7 +113,7 @@ export default function VoiceEnrollment({ onEnrollmentComplete, className = "" }
       console.error('Enrollment error:', error);
       toast({
         title: "Enrollment failed",
-        description: "There was an error enrolling your voice. Please try again.",
+        description: error instanceof Error ? error.message : "There was an error enrolling your voice. Please try again.",
         variant: "destructive"
       });
     } finally {
