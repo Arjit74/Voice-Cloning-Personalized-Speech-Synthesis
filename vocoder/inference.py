@@ -54,11 +54,30 @@ def infer_waveform(mel, normalize=True,  batched=True, target=8000, overlap=800,
     :param overlap: 
     :return: 
     """
+    import sys
     if _model is None:
         raise Exception("Please load Wave-RNN in memory before using it")
     
-    if normalize:
-        mel = mel / hp.mel_max_abs_value
-    mel = torch.from_numpy(mel[None, ...])
-    wav = _model.generate(mel, batched, target, overlap, hp.mu_law, progress_callback)
-    return wav
+    print(f"[Vocoder] Input mel-spectrogram shape: {mel.shape}")
+    print(f"[Vocoder] Normalize: {normalize}, Batched: {batched}, Target: {target}, Overlap: {overlap}")
+    print(f"[Vocoder] Device: {_device}, Model on: {next(_model.parameters()).device}")
+    
+    try:
+        if normalize:
+            mel = mel / hp.mel_max_abs_value
+        mel = torch.from_numpy(mel[None, ...])
+        print(f"[Vocoder] Mel tensor shape after processing: {mel.shape}, dtype: {mel.dtype}")
+        
+        print("[Vocoder] Starting waveform generation (this may take a while on CPU)...")
+        sys.stdout.flush()
+        
+        wav = _model.generate(mel, batched, target, overlap, hp.mu_law, progress_callback)
+        
+        print(f"[Vocoder] Waveform generated successfully, shape: {wav.shape}")
+        return wav
+    except Exception as e:
+        print(f"[Vocoder] ✗ Error during vocoding: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.stdout.flush()
+        raise

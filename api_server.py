@@ -25,9 +25,14 @@ OUTPUT_FOLDER = Path('outputs')
 MODELS_DIR = Path('models')
 VOICES_DB = Path('enrolled_voices') / 'voices.json'
 
-# Create directories
-UPLOAD_FOLDER.mkdir(exist_ok=True)
-OUTPUT_FOLDER.mkdir(exist_ok=True)
+# Create directories with parents
+try:
+    UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+    OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
+    VOICES_DB.parent.mkdir(parents=True, exist_ok=True)
+except Exception as e:
+    print(f"Failed to create directories: {e}")
+    sys.exit(1)
 
 # Allowed audio extensions
 ALLOWED_EXTENSIONS = {'mp3', 'wav', 'm4a', 'flac', 'ogg', 'webm'}
@@ -59,7 +64,7 @@ def health_check():
 def enroll_voice():
     """
     Enroll a new voice by accepting audio file and voice name
-    Frontend sends: FormData with 'audio' (File) and 'voiceName' (string)
+    Frontend sends: FormData with 'audio' (File) and 'voice_name' (string)
     """
     try:
         # Check if audio file is present
@@ -67,7 +72,7 @@ def enroll_voice():
             return jsonify({'error': 'No audio file provided'}), 400
         
         audio_file = request.files['audio']
-        voice_name = request.form.get('voice_name', 'Unnamed Voice')
+        voice_name = request.form.get('voice_name', 'Unnamed Voice').strip()
         
         if audio_file.filename == '':
             return jsonify({'error': 'No file selected'}), 400
@@ -75,14 +80,22 @@ def enroll_voice():
         if not allowed_file(audio_file.filename):
             return jsonify({'error': 'Invalid file type. Supported: mp3, wav, m4a, flac, ogg, webm'}), 400
         
+        # Ensure upload folder exists
+        UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+        
         # Generate unique ID and secure filename
         voice_id = f"voice_{uuid.uuid4().hex[:8]}"
         file_extension = audio_file.filename.rsplit('.', 1)[1].lower()
         filename = f"{voice_id}.{file_extension}"
         filepath = UPLOAD_FOLDER / filename
         
-        # Save the audio file
-        audio_file.save(str(filepath))
+        # Save the audio file with error handling
+        try:
+            audio_file.save(str(filepath))
+            print(f"✓ Audio file saved: {filepath}")
+        except Exception as file_err:
+            print(f"✗ Failed to save audio file: {file_err}")
+            return jsonify({'error': f'Failed to save audio: {str(file_err)}'}), 500
         
         # Create voice entry
         voice_entry = {
@@ -93,10 +106,16 @@ def enroll_voice():
             'createdAt': datetime.now().isoformat()
         }
         
-        # Update voices database
-        voices = load_voices_db()
-        voices.append(voice_entry)
-        save_voices_db(voices)
+        # Update voices database with error handling
+        try:
+            VOICES_DB.parent.mkdir(parents=True, exist_ok=True)
+            voices = load_voices_db()
+            voices.append(voice_entry)
+            save_voices_db(voices)
+            print(f"✓ Voice '{voice_name}' (ID: {voice_id}) enrolled successfully")
+        except Exception as db_err:
+            print(f"✗ Failed to update voices DB: {db_err}")
+            return jsonify({'error': f'Failed to save voice metadata: {str(db_err)}'}), 500
         
         return jsonify({
             'success': True,
@@ -107,7 +126,9 @@ def enroll_voice():
         }), 201
         
     except Exception as e:
-        print(f"Error enrolling voice: {e}")
+        print(f"✗ Error enrolling voice: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': f'Failed to enroll voice: {str(e)}'}), 500
 
 @app.route('/api/voices', methods=['GET'])
@@ -197,7 +218,7 @@ def synthesize_speech():
             import traceback
             traceback.print_exc()
             sys.stdout.flush()
-            raise
+            return jsonify({'error': f'Synthesis failed: {str(synth_error)}'}), 500
         
         if not output_path.exists():
             error_msg = 'Synthesis failed - output not generated'
@@ -267,6 +288,122 @@ def delete_voice(voice_id):
     except Exception as e:
         print(f"Error deleting voice: {e}")
         return jsonify({'error': f'Failed to delete voice: {str(e)}'}), 500
+
+@app.route('/api/spectrogram/<audio_filename>', methods=['GET'])
+def get_spectrogram(audio_filename):
+    """
+    Generate and return mel-spectrogram data for visualization
+    Frontend can use this to display real-time mel-spectrogram
+    """
+    try:
+        filepath = OUTPUT_FOLDER / audio_filename
+        if not filepath.exists():
+            return jsonify({'error': 'Audio file not found'}), 404
+        
+        # Import librosa for mel-spectrogram generation
+        import librosa
+        import numpy as np
+        
+        # Load audio file
+        y, sr = librosa.load(str(filepath), sr=None)
+        
+        # Generate mel-spectrogram
+        # 80 mel bands (common for Tacotron2), hop_length varies with sample rate
+        mel_spec = librosa.feature.melspectrogram(
+            y=y, 
+            sr=sr,
+            n_mels=80,
+            hop_length=512
+        )
+        
+        # Convert to dB scale (log scale for better visualization)
+        mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max)
+        
+        # Normalize to 0-255 range for visualization
+        mel_spec_normalized = np.clip(
+            ((mel_spec_db + 80) / 80 * 255), 
+            0, 
+            255
+        ).astype(np.uint8)
+        
+        # Convert to list for JSON serialization
+        # Transpose to time x frequency format for frontend
+        spectrogram_data = mel_spec_normalized.T.tolist()
+        
+        return jsonify({
+            'spectrogram': spectrogram_data,
+            'n_mels': 80,
+            'shape': {
+                'time_steps': len(spectrogram_data),
+                'frequency_bins': 80
+            }
+        }), 200
+        
+    except ImportError:
+        return jsonify({'error': 'Librosa not available for spectrogram generation'}), 500
+    except Exception as e:
+        print(f"Error generating spectrogram: {e}")
+        return jsonify({'error': f'Failed to generate spectrogram: {str(e)}'}), 500
+
+
+@app.route('/api/waveform/<audio_filename>', methods=['GET'])
+def get_waveform(audio_filename):
+    """
+    Serve audio waveform as numeric array for real-time FFT visualization
+    Frontend fetches this and computes FFT using Web Audio API
+    """
+    try:
+        filepath = OUTPUT_FOLDER / audio_filename
+        if not filepath.exists():
+            return jsonify({'error': 'Audio file not found'}), 404
+        
+        import soundfile as sf
+        import numpy as np
+        
+        # Load audio file
+        # soundfile returns (data, sample_rate)
+        y, sr = sf.read(str(filepath))
+        
+        # If stereo, convert to mono by taking first channel or averaging
+        if len(y.shape) > 1:
+            y = np.mean(y, axis=1)
+        
+        # Ensure float32 for compatibility
+        y = np.asarray(y, dtype=np.float32)
+        
+        # Downsample if very long to reduce JSON payload
+        # Typical waveform for 60s at 22050Hz = 1.3M samples
+        # For FFT we can use 8000 Hz safely (captures up to 4 kHz)
+        target_sr = 8000
+        if sr > target_sr:
+            # Calculate downsample factor
+            resample_ratio = target_sr / sr
+            new_length = int(len(y) * resample_ratio)
+            # Simple linear interpolation for downsampling
+            indices = np.linspace(0, len(y) - 1, new_length)
+            y = np.interp(indices, np.arange(len(y)), y)
+            sr = target_sr
+        
+        # Convert to list for JSON serialization
+        waveform_data = y.tolist()
+        
+        return jsonify({
+            'waveform': waveform_data,
+            'sample_rate': sr,
+            'duration': len(y) / sr,
+            'samples': len(y)
+        }), 200
+        
+    except ImportError as ie:
+        err_msg = f'Soundfile library not available: {str(ie)}'
+        return jsonify({'error': err_msg}), 500
+    except Exception as e:
+        print(f"Error serving waveform: {e}")
+        import traceback
+        traceback.print_exc()
+        err_msg = f'Failed to generate waveform: {str(e)}'
+        return jsonify({'error': err_msg}), 500
+
 
 if __name__ == '__main__':
     print("=" * 60)

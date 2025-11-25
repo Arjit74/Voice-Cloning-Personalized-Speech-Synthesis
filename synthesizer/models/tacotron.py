@@ -415,6 +415,8 @@ class Tacotron(nn.Module):
         return mel_outputs, linear, attn_scores, stop_outputs
 
     def generate(self, x, speaker_embedding=None, steps=2000):
+        import sys
+        
         self.eval()
         device = next(self.parameters()).device  # use same device as parameters
 
@@ -439,13 +441,19 @@ class Tacotron(nn.Module):
 
         # SV2TTS: Run the encoder with the speaker embedding
         # The projection avoids unnecessary matmuls in the decoder loop
+        print("    [Tacotron] Running encoder...", end='', flush=True)
+        sys.stdout.flush()
         encoder_seq = self.encoder(x, speaker_embedding)
         encoder_seq_proj = self.encoder_proj(encoder_seq)
+        print(" OK")
+        sys.stdout.flush()
 
         # Need a couple of lists for outputs
         mel_outputs, attn_scores, stop_outputs = [], [], []
 
         # Run the decoder loop
+        print(f"    [Tacotron] Decoder loop: 0/{steps} steps", end='')
+        sys.stdout.flush()
         for t in range(0, steps, self.r):
             prenet_in = mel_outputs[-1][:, :, -1] if t > 0 else go_frame
             mel_frames, scores, hidden_states, cell_states, context_vec, stop_tokens = \
@@ -454,16 +462,29 @@ class Tacotron(nn.Module):
             mel_outputs.append(mel_frames)
             attn_scores.append(scores)
             stop_outputs.extend([stop_tokens] * self.r)
+            
+            # Progress every 100 steps
+            if t % 100 == 0:
+                print(f"\r    [Tacotron] Decoder loop: {t}/{steps} steps", end='')
+                sys.stdout.flush()
+            
             # Stop the loop when all stop tokens in batch exceed threshold
-            if (stop_tokens > 0.5).all() and t > 10: break
+            if (stop_tokens > 0.5).all() and t > 10:
+                print(f"\r    [Tacotron] Decoder loop: {t}/{steps} steps (stopped early)")
+                sys.stdout.flush()
+                break
+
+        print(f"\r    [Tacotron] Decoder loop: {len(mel_outputs) * self.r}/{steps} steps (complete)")
+        sys.stdout.flush()
 
         # Concat the mel outputs into sequence
+        print("    [Tacotron] Concatenating and post-processing...", end='', flush=True)
+        sys.stdout.flush()
         mel_outputs = torch.cat(mel_outputs, dim=2)
 
         # Post-Process for Linear Spectrograms
         postnet_out = self.postnet(mel_outputs)
         linear = self.post_proj(postnet_out)
-
 
         linear = linear.transpose(1, 2)
 
@@ -471,6 +492,8 @@ class Tacotron(nn.Module):
         attn_scores = torch.cat(attn_scores, 1)
         stop_outputs = torch.cat(stop_outputs, 1)
 
+        print(" OK")
+        sys.stdout.flush()
         self.train()
 
         return mel_outputs, linear, attn_scores

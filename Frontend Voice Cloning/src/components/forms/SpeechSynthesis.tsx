@@ -5,10 +5,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Play, Pause, Download, Volume2 } from 'lucide-react';
+import { Play, Pause, Download, Volume2, Activity } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import SpeakerScene from '../three/SpeakerScene';
 import AudioWaveform from '../audio/AudioWaveform';
+import MelSpectrogramVisualizer from '../audio/MelSpectrogramVisualizer';
+import ProcessingPipeline from '../audio/ProcessingPipeline';
+import FFTVisualizer from '../audio/FFTVisualizer';
+import RealTimeStatsDashboard from '../audio/RealTimeStatsDashboard';
 
 interface Voice {
   id: string;
@@ -42,6 +46,10 @@ export default function SpeechSynthesis({
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [voices, setVoices] = useState<Voice[]>(propVoices || []);
   const [isLoadingVoices, setIsLoadingVoices] = useState(false);
+  const [spectrogramData, setSpectrogramData] = useState<number[][]>([]);
+  const [audioFilename, setAudioFilename] = useState<string>('');
+  const [showStatsDashboard, setShowStatsDashboard] = useState(false);
+  const [synthesizerStartTime, setSynthesizerStartTime] = useState<number | null>(null);
   
   const { toast } = useToast();
 
@@ -98,6 +106,8 @@ export default function SpeechSynthesis({
     }
 
     setIsSynthesizing(true);
+    setSpectrogramData([]); // Reset spectrogram
+    setSynthesizerStartTime(Date.now()); // Record synthesis start time
 
     try {
       // Call backend API for synthesis
@@ -121,6 +131,27 @@ export default function SpeechSynthesis({
       
       // Get the audio file URL from backend with cache busting
       const audioUrl = `http://localhost:5000${result.audio_url}?t=${Date.now()}`;
+      
+      // Extract filename from audio_url (e.g., "/api/audio/synthesis_abc123.wav" -> "synthesis_abc123.wav")
+      const filename = result.audio_url.split('/').pop() || '';
+      setAudioFilename(filename); // Store filename for mel-spectrogram real-time fetching
+      
+      // Fetch mel-spectrogram data after synthesis
+      if (filename) {
+        try {
+          const spectrogramResponse = await fetch(
+            `http://localhost:5000/api/spectrogram/${filename}`
+          );
+          if (spectrogramResponse.ok) {
+            const spectrogramResult = await spectrogramResponse.json();
+            setSpectrogramData(spectrogramResult.spectrogram);
+            console.log('Spectrogram data loaded:', spectrogramResult);
+          }
+        } catch (err) {
+          console.warn('Could not load spectrogram data:', err);
+          // Continue without spectrogram data
+        }
+      }
       
       // Reset audio element to force reload
       if (audioElement) {
@@ -147,6 +178,7 @@ export default function SpeechSynthesis({
       });
     } finally {
       setIsSynthesizing(false);
+      setSynthesizerStartTime(null); // Reset start time when synthesis ends
     }
   };
 
@@ -194,13 +226,26 @@ export default function SpeechSynthesis({
   };
 
   return (
-    <Card className={`glass-effect ${className}`}>
-      <CardHeader>
-        <CardTitle className="gradient-text">Speech Synthesis</CardTitle>
-        <CardDescription>
-          Convert text to speech using your enrolled voices
-        </CardDescription>
-      </CardHeader>
+    <>
+      <Card className={`glass-effect ${className}`}>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="gradient-text">Speech Synthesis</CardTitle>
+            <CardDescription>
+              Convert text to speech using your enrolled voices
+            </CardDescription>
+          </div>
+          <Button
+            onClick={() => setShowStatsDashboard(true)}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            title="Show real-time synthesis dashboard"
+          >
+            <Activity className="w-4 h-4" />
+            Dashboard
+          </Button>
+        </CardHeader>
       <CardContent className="space-y-6">
         {/* Voice Selection */}
         <div className="space-y-2">
@@ -284,6 +329,25 @@ export default function SpeechSynthesis({
           </div>
           
           <div className="space-y-4">
+            {/* Mel-Spectrogram Visualization */}
+            <MelSpectrogramVisualizer 
+              isActive={isSynthesizing}
+              spectrogramData={spectrogramData}
+              audioFilename={audioFilename}
+            />
+
+            {/* FFT Spectrum Analyzer */}
+            <FFTVisualizer 
+              isActive={isSynthesizing}
+              audioFilename={audioFilename}
+              synthesizerStartTime={synthesizerStartTime}
+            />
+
+            {/* Processing Pipeline */}
+            <ProcessingPipeline 
+              isActive={isSynthesizing}
+            />
+
             {/* Waveform Visualization */}
             <div className="h-16 flex items-center justify-center">
               <AudioWaveform 
@@ -325,5 +389,15 @@ export default function SpeechSynthesis({
         )}
       </CardContent>
     </Card>
+
+    <RealTimeStatsDashboard
+      isOpen={showStatsDashboard}
+      onOpenChange={setShowStatsDashboard}
+      synthesizerStartTime={synthesizerStartTime}
+      isSynthesizing={isSynthesizing}
+      currentVoiceName={voices.find(v => v.id === selectedVoice)?.name || 'Current Voice'}
+      enrolledVoiceCount={voices.length}
+    />
+    </>
   );
 }
