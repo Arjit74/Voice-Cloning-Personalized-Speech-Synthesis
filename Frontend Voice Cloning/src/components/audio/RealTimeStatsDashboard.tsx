@@ -19,7 +19,6 @@ export default function RealTimeStatsDashboard({
   currentVoiceName = 'Current Voice',
   enrolledVoiceCount = 5
 }: RealTimeStatsDashboardProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const animationFrameRef = useRef<number>();
 
@@ -45,135 +44,6 @@ export default function RealTimeStatsDashboard({
       }
     };
   }, [isOpen, isSynthesizing, synthesizerStartTime]);
-
-  // Draw embedding space visualization
-  useEffect(() => {
-    if (!canvasRef.current || !isOpen) return;
-
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const width = canvas.width;
-    const height = canvas.height;
-
-    // Clear canvas
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
-    ctx.fillRect(0, 0, width, height);
-
-    // Draw grid
-    ctx.strokeStyle = 'rgba(100, 150, 200, 0.1)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= 10; i++) {
-      const x = (width / 10) * i;
-      const y = (height / 10) * i;
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
-
-    // Draw axes
-    ctx.strokeStyle = 'rgba(150, 150, 150, 0.3)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(width / 2, 0);
-    ctx.lineTo(width / 2, height);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, height / 2);
-    ctx.lineTo(width, height / 2);
-    ctx.stroke();
-
-    // Draw enrolled voices as clusters
-    const numEnrolledVoices = Math.max(enrolledVoiceCount, 3);
-    for (let i = 0; i < numEnrolledVoices; i++) {
-      const angle = (i / numEnrolledVoices) * Math.PI * 2;
-      const radius = 80;
-      const x = width / 2 + Math.cos(angle) * radius;
-      const y = height / 2 + Math.sin(angle) * radius;
-
-      // Draw voice cluster circle
-      const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#6c5ce7', '#a29bfe'];
-      ctx.fillStyle = colors[i % colors.length] + '60';
-      ctx.beginPath();
-      ctx.arc(x, y, 25, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Draw voice dot
-      ctx.fillStyle = colors[i % colors.length];
-      ctx.beginPath();
-      ctx.arc(x, y, 8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Label
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-      ctx.font = 'bold 11px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(`Voice ${i + 1}`, x, y + 45);
-    }
-
-    // Draw current voice (animated around the circle)
-    const time = elapsedSeconds;
-    const currentAngle = (time * 2) % (Math.PI * 2);
-    const currentRadius = 120;
-    const currentX = width / 2 + Math.cos(currentAngle) * currentRadius;
-    const currentY = height / 2 + Math.sin(currentAngle) * currentRadius;
-
-    // Highlight circle
-    ctx.strokeStyle = 'rgba(0, 255, 100, 0.5)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(currentX, currentY, 40, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Current voice point
-    ctx.fillStyle = 'rgba(0, 255, 100, 0.9)';
-    ctx.beginPath();
-    ctx.arc(currentX, currentY, 6, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Glow effect
-    ctx.fillStyle = 'rgba(0, 255, 100, 0.1)';
-    ctx.beginPath();
-    ctx.arc(currentX, currentY, 50, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Label
-    ctx.fillStyle = 'rgba(0, 255, 100, 0.9)';
-    ctx.font = 'bold 12px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(currentVoiceName, currentX, currentY - 60);
-
-    // Draw distance lines to nearby voices
-    ctx.strokeStyle = 'rgba(100, 200, 255, 0.2)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < numEnrolledVoices; i++) {
-      const angle = (i / numEnrolledVoices) * Math.PI * 2;
-      const radius = 80;
-      const voiceX = width / 2 + Math.cos(angle) * radius;
-      const voiceY = height / 2 + Math.sin(angle) * radius;
-
-      ctx.beginPath();
-      ctx.moveTo(currentX, currentY);
-      ctx.lineTo(voiceX, voiceY);
-      ctx.stroke();
-
-      // Distance value
-      const dist = Math.hypot(voiceX - currentX, voiceY - currentY);
-      const midX = (currentX + voiceX) / 2;
-      const midY = (currentY + voiceY) / 2;
-      
-      ctx.fillStyle = 'rgba(100, 200, 255, 0.5)';
-      ctx.font = '9px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(dist.toFixed(0), midX, midY);
-    }
-  }, [isOpen, elapsedSeconds, enrolledVoiceCount, currentVoiceName]);
 
   // Stage timing configuration
   const stages = [
@@ -204,25 +74,11 @@ export default function RealTimeStatsDashboard({
         <DialogHeader>
           <DialogTitle>Real-Time Synthesis Dashboard</DialogTitle>
           <DialogDescription>
-            Speaker embedding space and synthesis metrics
+            Synthesis progress and system metrics
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Embedding Space Visualization */}
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-foreground">Speaker Embedding Space</h3>
-            <canvas
-              ref={canvasRef}
-              width={400}
-              height={300}
-              className="w-full border border-border rounded-lg bg-slate-900"
-            />
-            <p className="text-xs text-muted-foreground">
-              Green circle shows current voice position. Lines show distance to enrolled voices.
-            </p>
-          </div>
-
           {/* Metrics Grid */}
           <div className="grid grid-cols-3 gap-3">
             {stages.map((stage) => {
