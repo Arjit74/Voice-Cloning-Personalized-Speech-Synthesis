@@ -7,17 +7,21 @@ interface PipelineStage {
   description: string;
   status: 'pending' | 'active' | 'completed';
   progress?: number;
+  duration?: number; // in seconds
+  startTime?: number; // timestamp when stage started
 }
 
 interface ProcessingPipelineProps {
   isActive: boolean;
   currentStage?: string;
+  synthesizerStartTime?: number | null; // timestamp from parent when synthesis started
   className?: string;
 }
 
 export default function ProcessingPipeline({
   isActive,
   currentStage,
+  synthesizerStartTime,
   className = ""
 }: ProcessingPipelineProps) {
   const [stages, setStages] = useState<PipelineStage[]>([
@@ -26,66 +30,84 @@ export default function ProcessingPipeline({
       name: 'Speaker Encoder',
       description: 'Extracting voice embedding',
       status: 'pending',
-      progress: 0
+      progress: 0,
+      duration: 3
     },
     {
       id: 'synthesizer',
       name: 'Tacotron2 Synthesizer',
       description: 'Generating mel-spectrogram',
       status: 'pending',
-      progress: 0
+      progress: 0,
+      duration: 45
     },
     {
       id: 'vocoder',
       name: 'WaveRNN Vocoder',
       description: 'Converting to audio',
       status: 'pending',
-      progress: 0
+      progress: 0,
+      duration: 10
     }
   ]);
 
-  // Simulate stage progression during synthesis
+  // Real-time sync with backend using elapsed time
   useEffect(() => {
-    if (!isActive) {
+    if (!isActive || !synthesizerStartTime) {
       // Reset stages when not active
-      setStages(stages.map(s => ({ ...s, status: 'pending', progress: 0 })));
+      setStages(s => s.map(st => ({ ...st, status: 'pending', progress: 0 })));
       return;
     }
 
-    // Define stage timing (realistic based on actual synthesis)
-    const stageTiming = {
-      encoder: { start: 0, duration: 3, startMs: 0 },
-      synthesizer: { start: 3, duration: 45, startMs: 3000 },
-      vocoder: { start: 48, duration: 10, startMs: 48000 }
-    };
+    // Update progress based on actual elapsed time from backend
+    const updateProgress = () => {
+      const elapsedMs = Date.now() - synthesizerStartTime;
+      const elapsedSeconds = elapsedMs / 1000;
 
-    const interval = setInterval(() => {
       setStages(prevStages => {
-        const now = Date.now() - (stageTiming.encoder.startMs);
-        const totalDuration = 60000; // 60 seconds total
-
         return prevStages.map(stage => {
-          const timing = stageTiming[stage.id as keyof typeof stageTiming];
-          if (!timing) return stage;
+          // Define stage timing
+          let stageStart = 0;
+          let stageDuration = stage.duration || 0;
 
-          const stageStart = timing.startMs;
-          const stageEnd = stageStart + timing.duration * 1000;
+          if (stage.id === 'encoder') {
+            stageStart = 0;
+            stageDuration = 3;
+          } else if (stage.id === 'synthesizer') {
+            stageStart = 3;
+            stageDuration = 45;
+          } else if (stage.id === 'vocoder') {
+            stageStart = 48;
+            stageDuration = 10;
+          }
 
-          if (now < stageStart) {
+          const stageEnd = stageStart + stageDuration;
+
+          // Calculate status based on actual elapsed time
+          if (elapsedSeconds < stageStart) {
+            // Stage hasn't started yet
             return { ...stage, status: 'pending', progress: 0 };
-          } else if (now >= stageStart && now < stageEnd) {
-            const elapsed = now - stageStart;
-            const progress = Math.min(99, (elapsed / (timing.duration * 1000)) * 100);
+          } else if (elapsedSeconds >= stageStart && elapsedSeconds < stageEnd) {
+            // Stage is currently active
+            const stageElapsed = elapsedSeconds - stageStart;
+            const progress = Math.min(99, (stageElapsed / stageDuration) * 100);
             return { ...stage, status: 'active', progress };
           } else {
+            // Stage is completed
             return { ...stage, status: 'completed', progress: 100 };
           }
         });
       });
-    }, 100);
+    };
+
+    // Update immediately
+    updateProgress();
+
+    // Update every 100ms for smooth animation
+    const interval = setInterval(updateProgress, 100);
 
     return () => clearInterval(interval);
-  }, [isActive]);
+  }, [isActive, synthesizerStartTime]);
 
   const getStageIcon = (stage: PipelineStage) => {
     if (stage.status === 'completed') {

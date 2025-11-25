@@ -346,6 +346,7 @@ export default function SpeechSynthesis({
             {/* Processing Pipeline */}
             <ProcessingPipeline 
               isActive={isSynthesizing}
+              synthesizerStartTime={synthesizerStartTime}
             />
 
             {/* Waveform Visualization */}
