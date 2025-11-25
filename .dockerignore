@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+dist
+build
+.pytest_cache
+.venv
+venv
+
+# Node/Frontend
+node_modules
+.next
+out
+Frontend\ Voice\ Cloning/node_modules
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary
+*.tmp
+temp/
+tmp/
+
+# Environment
+.env
+.env.local
+
+# Documentation
+*.md
+README.md
+DEPLOYMENT_GUIDE.md
+AZURE_DEPLOYMENT.md
+
+# Misc
+.dockerignore
+Dockerfile
+Procfile
+docker-compose.yml
