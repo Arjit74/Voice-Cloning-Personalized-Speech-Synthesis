@@ -16,11 +16,15 @@ export default function FFTVisualizer({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
   const [fftData, setFftData] = useState<number[]>([]);
+  const [animatedFftData, setAnimatedFftData] = useState<number[]>([]);
+  const lastUpdateRef = useRef<number>(0);
+  const BINS = 32;
 
   // Fetch and analyze real audio data from backend - SIMPLE
   useEffect(() => {
     if (!isActive || !audioFilename) {
       setFftData([]);
+      setAnimatedFftData([]);
       return;
     }
 
@@ -48,11 +52,10 @@ export default function FFTVisualizer({
         console.log('[FFT] Decoded, samples:', channelData.length);
 
         // SUPER SIMPLE: 32 bins, just max amplitude per bin
-        const bins = 32;
-        const samplesPerBin = Math.floor(channelData.length / bins);
+        const samplesPerBin = Math.floor(channelData.length / BINS);
         const result: number[] = [];
 
-        for (let i = 0; i < bins; i++) {
+        for (let i = 0; i < BINS; i++) {
           const start = i * samplesPerBin;
           const end = Math.min(start + samplesPerBin, channelData.length);
           
@@ -66,6 +69,7 @@ export default function FFTVisualizer({
 
         console.log('[FFT] Result:', result);
         setFftData(result);
+        lastUpdateRef.current = Date.now();
       } catch (err) {
         console.error('[FFT] Error:', err);
       }
@@ -75,6 +79,48 @@ export default function FFTVisualizer({
     const interval = setInterval(fetchAndAnalyzeAudio, 3000);
     return () => clearInterval(interval);
   }, [isActive, audioFilename]);
+
+  // Smooth animation between FFT updates
+  useEffect(() => {
+    if (!isActive) return;
+
+    const animate = () => {
+      const nowSec = synthesizerStartTime
+        ? (Date.now() - synthesizerStartTime) / 1000
+        : Date.now() / 1000;
+
+      setAnimatedFftData(prev => {
+        // If no real FFT data yet, produce a synchronized placeholder animation
+        if (fftData.length === 0) {
+          const placeholder = new Array(BINS).fill(0).map((_, i) => {
+            const phase = i * 0.35;
+            const val = (Math.sin(nowSec * 2 + phase) + 1) / 2; // 0..1
+            const env = (Math.sin(nowSec * 0.7 + i * 0.13) + 1) / 2;
+            return Math.min(255, Math.max(0, (val * 0.6 + env * 0.4) * 255 + (Math.random() - 0.5) * 8));
+          });
+          return placeholder;
+        }
+
+        // If we have real data, smoothly animate current bars toward targets
+        if (prev.length === 0) return fftData;
+
+        const animationSpeed = 0.15; // adjust for faster/slower animation
+        return prev.map((current, i) => {
+          const target = fftData[i] || 0;
+          const diff = target - current;
+          return current + diff * animationSpeed;
+        });
+      });
+
+      animationRef.current = requestAnimationFrame(animate);
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+    };
+  }, [isActive, fftData]);
 
   // Draw
   useEffect(() => {
@@ -91,11 +137,11 @@ export default function FFTVisualizer({
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, width, height);
 
-    if (fftData.length > 0) {
-      // Draw bars
-      const barWidth = width / fftData.length;
-      for (let i = 0; i < fftData.length; i++) {
-        const magnitude = Math.min(fftData[i], 255);
+    if (animatedFftData.length > 0) {
+      // Draw bars with animation
+      const barWidth = width / animatedFftData.length;
+      for (let i = 0; i < animatedFftData.length; i++) {
+        const magnitude = Math.min(animatedFftData[i], 255);
         const barHeight = (magnitude / 255) * (height - 20);
         const x = i * barWidth;
         const y = height - barHeight - 10;
@@ -111,7 +157,7 @@ export default function FFTVisualizer({
       ctx.fillText('Loading...', width / 2, height / 2);
     }
 
-  }, [fftData, isActive]);
+  }, [animatedFftData, isActive]);
 
   return (
     <div className={`flex flex-col gap-2 p-4 bg-slate-950 rounded-lg border border-slate-700 ${className}`}>
