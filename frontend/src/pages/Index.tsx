@@ -251,6 +251,8 @@ const Index = () => {
             <TabsContent value="synthesize" className="space-y-6">
               <SpeechSynthesis 
                 voices={enrolledVoices.length ? enrolledVoices : undefined}
+                language={language}
+                onLanguageChange={setLanguage}
                 onSynthesisComplete={handleSynthesisComplete} 
               />
               

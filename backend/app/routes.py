@@ -1,6 +1,7 @@
 """
 Flask API Backend for Voice Cloning
 Integrates the Python voice cloning backend with the React frontend
+Supports multilingual synthesis: English (WaveRNN) and Hindi (XTTS)
 """
 
 from flask import Blueprint, request, jsonify, send_file
@@ -9,6 +10,7 @@ import uuid
 import json
 from datetime import datetime
 import sys
+import os
 
 from .voice_cloning import synthesize
 
@@ -21,6 +23,24 @@ UPLOAD_FOLDER = BASE_DIR / 'enrolled_voices'
 OUTPUT_FOLDER = BASE_DIR / 'outputs'
 MODELS_DIR = BASE_DIR / 'models'
 VOICES_DB = UPLOAD_FOLDER / 'voices.json'
+
+# Hindi model directory (check multiple possible locations)
+HINDI_MODEL_DIR = None
+possible_hindi_dirs = [
+    Path(os.getenv('HINDI_MODEL_PATH', '')) if os.getenv('HINDI_MODEL_PATH') else None,
+    BASE_DIR.parent / 'Apoorv_hindi_model' / 'models' / 'xtts_hindi',  # Local development
+    BASE_DIR / 'models' / 'xtts_hindi',  # Alternative location
+]
+for path in possible_hindi_dirs:
+    if path and path.exists():
+        HINDI_MODEL_DIR = path
+        print(f"✓ Hindi model found at: {HINDI_MODEL_DIR}")
+        break
+
+if not HINDI_MODEL_DIR:
+    print("⚠ Hindi model not found. Hindi synthesis will be unavailable.")
+    print("  To enable Hindi support, set HINDI_MODEL_PATH environment variable")
+    print("  or place model at: Apoorv_hindi_model/models/xtts_hindi")
 
 # Create directories with parents
 try:
@@ -152,8 +172,18 @@ def get_voices():
 @bp.route('/synthesize', methods=['POST'])
 def synthesize_speech():
     """
-    Synthesize speech from text using enrolled voice
-    Frontend sends: { "text": "...", "voiceId": "voice_xxx" }
+    Synthesize speech from text using enrolled voice (multilingual support).
+    
+    Frontend sends JSON:
+    {
+        "text": "Your text here",
+        "voice_id": "voice_xxx",
+        "language": "english" or "hindi"  (optional, defaults to english)
+    }
+    
+    Supports:
+    - English: Uses WaveRNN vocoder (existing model)
+    - Hindi: Uses XTTS model (requires hindi_model_dir)
     """
     try:
         data = request.get_json()
@@ -162,13 +192,24 @@ def synthesize_speech():
             return jsonify({'error': 'No data provided'}), 400
         
         text = data.get('text', '').strip()
-        voice_id = data.get('voice_id', '')  # Changed from 'voiceId' to 'voice_id'
+        voice_id = data.get('voice_id', '')
+        language = data.get('language', 'english').lower()
         
         if not text:
             return jsonify({'error': 'No text provided'}), 400
         
         if not voice_id:
             return jsonify({'error': 'No voice selected'}), 400
+        
+        if language not in ['english', 'hindi']:
+            return jsonify({'error': f'Unsupported language: {language}. Supported: english, hindi'}), 400
+        
+        # Check if Hindi model is available for Hindi synthesis
+        if language == 'hindi' and not HINDI_MODEL_DIR:
+            return jsonify({
+                'error': 'Hindi synthesis unavailable. Hindi model not configured.',
+                'available_languages': ['english']
+            }), 503
         
         # Find the voice in database
         voices = load_voices_db()
@@ -177,7 +218,7 @@ def synthesize_speech():
         if not voice:
             return jsonify({'error': 'Voice not found'}), 404
         
-        # Reconstruct path from UPLOAD_FOLDER (server-agnostic)
+        # Reconstruct path from UPLOAD_FOLDER
         voice_filepath = UPLOAD_FOLDER / voice['filename']
             
         if not voice_filepath.exists():
@@ -187,28 +228,43 @@ def synthesize_speech():
         output_filename = f"synthesis_{uuid.uuid4().hex[:8]}.wav"
         output_path = OUTPUT_FOLDER / output_filename
         
-        # Call the voice cloning synthesis function
-        print(f"Synthesizing: '{text}' with voice '{voice['name']}'")
-        print(f"Voice file: {voice_filepath}")
-        print(f"Output path: {output_path}")
-        print(f"Models dir: {MODELS_DIR}")
-        print("Starting synthesis... This may take 30-60 seconds...")
+        print(f"\n[API /synthesize]")
+        print(f"  Language: {language.upper()}")
+        print(f"  Text: '{text[:50]}...'")
+        print(f"  Voice: '{voice['name']}'")
+        print(f"  Voice file: {voice_filepath}")
+        print(f"  Output: {output_path}")
+        sys.stdout.flush()
         
         try:
-            # Flush output to see logs immediately
+            if language == 'english':
+                # Use original English synthesis (WaveRNN)
+                synthesize(
+                    voice_path=voice_filepath,
+                    text=text,
+                    models_dir=MODELS_DIR,
+                    out_path=output_path
+                )
+            else:
+                # Use multilingual TTS for Hindi
+                from app.multilingual_tts import MultilingualTTSService
+                tts_service = MultilingualTTSService(
+                    models_dir=MODELS_DIR,
+                    hindi_model_dir=HINDI_MODEL_DIR
+                )
+                tts_service.synthesize_and_save(
+                    text=text,
+                    voice_sample_path=voice_filepath,
+                    output_path=output_path,
+                    language=language
+                )
+                tts_service.cleanup()
+            
+            print(f"[API /synthesize] ✓ Synthesis completed!")
             sys.stdout.flush()
             
-            synthesize(
-                voice_path=voice_filepath,
-                text=text,
-                models_dir=MODELS_DIR,
-                out_path=output_path
-            )
-            
-            print(f"Synthesis completed! Output saved to: {output_path}")
-            sys.stdout.flush()
         except Exception as synth_error:
-            print(f"Synthesis error: {synth_error}")
+            print(f"[API /synthesize] ✗ Synthesis error: {synth_error}")
             import traceback
             traceback.print_exc()
             sys.stdout.flush()
@@ -221,12 +277,13 @@ def synthesize_speech():
         # Return the audio file URL
         return jsonify({
             'success': True,
-            'message': 'Speech synthesized successfully',
-            'audio_url': f'/api/audio/{output_filename}'
+            'message': f'{language.capitalize()} speech synthesized successfully',
+            'audio_url': f'/api/audio/{output_filename}',
+            'language': language
         }), 200
         
     except Exception as e:
-        print(f"Error synthesizing speech: {e}")
+        print(f"[API /synthesize] Unexpected error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': f'Failed to synthesize speech: {str(e)}'}), 500
@@ -480,20 +537,24 @@ def convert_song():
         
         # Process song
         try:
-            from app.song_conversion.song_processor import SongProcessor
+            from app.multilingual_song_processor import MultilingualSongProcessor
             
-            processor = SongProcessor(models_dir=MODELS_DIR)
+            processor = MultilingualSongProcessor(
+                models_dir=MODELS_DIR,
+                hindi_model_dir=HINDI_MODEL_DIR if language == 'hindi' else None
+            )
             
             output_filename = f"converted_song_{uuid.uuid4()}.wav"
             output_path = OUTPUT_FOLDER / output_filename
+            
+            print(f"[API /convert_song] Using {language.upper()} model for conversion")
             
             result_path = processor.convert_song(
                 song_path=song_path,
                 voice_path=voice_path,
                 output_path=output_path,
                 language=language,
-                add_effects=add_effects,
-                models_dir=MODELS_DIR
+                add_effects=add_effects
             )
             
             # Clean up temp song file
@@ -502,18 +563,19 @@ def convert_song():
             except Exception as e:
                 print(f"[API] Warning: Failed to clean temp song: {e}")
             
-            print(f"[API] Conversion successful: {result_path}")
+            print(f"[API /convert_song] ✓ Conversion successful: {result_path}")
             
             return jsonify({
                 'status': 'success',
                 'audio_url': f'/api/audio/{output_filename}',
-                'filename': output_filename
+                'filename': output_filename,
+                'language': language
             }), 200
             
         except ImportError as ie:
             return jsonify({'error': f'Song conversion module not available: {str(ie)}'}), 500
         except Exception as e:
-            print(f"[API] Conversion error: {e}")
+            print(f"[API /convert_song] Conversion error: {e}")
             import traceback
             traceback.print_exc()
             return jsonify({'error': f'Song conversion failed: {str(e)}'}), 500

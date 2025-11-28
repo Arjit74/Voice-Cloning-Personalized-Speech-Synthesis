@@ -41,9 +41,9 @@ export const api = {
   },
 
   /**
-   * Synthesize speech from text
+   * Synthesize speech from text (supports multilingual: english, hindi)
    */
-  synthesize: async (voiceId: string, text: string) => {
+  synthesize: async (voiceId: string, text: string, language: string = 'english') => {
     const response = await fetch(api.getUrl('/synthesize'), {
       method: 'POST',
       headers: {
@@ -52,6 +52,7 @@ export const api = {
       body: JSON.stringify({
         voice_id: voiceId,
         text: text,
+        language: language,
       }),
     });
     if (!response.ok) {

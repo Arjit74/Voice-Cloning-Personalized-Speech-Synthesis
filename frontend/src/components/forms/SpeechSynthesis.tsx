@@ -23,6 +23,8 @@ interface Voice {
 
 interface SpeechSynthesisProps {
   voices?: Voice[];
+  language?: 'english' | 'hindi';
+  onLanguageChange?: (language: 'english' | 'hindi') => void;
   onSynthesisComplete?: (audioUrl: string) => void;
   className?: string;
 }
@@ -36,6 +38,8 @@ const sampleTexts = {
 
 export default function SpeechSynthesis({ 
   voices: propVoices,
+  language = 'english',
+  onLanguageChange,
   onSynthesisComplete,
   className = "" 
 }: SpeechSynthesisProps) {
@@ -113,8 +117,8 @@ export default function SpeechSynthesis({
     setSynthesizerStartTime(Date.now()); // Record synthesis start time
 
     try {
-      // Call backend API for synthesis
-      const result = await api.synthesize(selectedVoice, inputText);
+      // Call backend API for synthesis with language support
+      const result = await api.synthesize(selectedVoice, inputText, language);
       
       // Get the audio file URL from backend with cache busting
       const audioUrl = api.getAudioUrl(result.audio_url) + `?t=${Date.now()}`;
@@ -228,6 +232,30 @@ export default function SpeechSynthesis({
           </Button>
         </CardHeader>
       <CardContent className="space-y-6">
+        {/* Language Selector */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => onLanguageChange?.('english')}
+            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
+              language === 'english'
+                ? 'bg-blue-600 text-white shadow-lg'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            🇬🇧 English
+          </button>
+          <button
+            onClick={() => onLanguageChange?.('hindi')}
+            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
+              language === 'hindi'
+                ? 'bg-orange-600 text-white shadow-lg'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            🇮🇳 हिन्दी
+          </button>
+        </div>
+
         {/* Voice Selection */}
         <div className="space-y-2">
           <Label htmlFor="voice-select">Select Voice</Label>
