@@ -2,13 +2,12 @@ services:
   - type: web
     name: voice-cloning-backend
     env: python
+    pythonVersion: 3.10
     plan: free
     buildCommand: |
       pip install -r backend/requirements.txt && python download_models.py
     startCommand: |
       cd backend && gunicorn wsgi:app --timeout 120
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.10.0
       - key: HF_HOME
         value: /opt/render/project/.cache/huggingface
