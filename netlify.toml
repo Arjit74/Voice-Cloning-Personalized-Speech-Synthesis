@@ -1,11 +1,7 @@
 [build]
   base = "frontend"
   command = "npm run build"
-  publish = "frontend/dist"
-
-[build.environment]
-  VITE_API_URL = "https://voice-cloning-backend.onrender.com"
-  NODE_VERSION = "18.17.0"
+  publish = "dist"
 
 [[redirects]]
   from = "/*"
@@ -16,6 +12,3 @@
   command = "npm run dev"
   port = 8080
   targetPort = 8080
-
-[[plugins]]
-  package = "netlify-plugin-webpack-staticsites"
