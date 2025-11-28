@@ -2,12 +2,24 @@
 
 import os
 import sys
+import builtins
 
-# Set environment variables BEFORE any TTS imports to bypass CPML prompt
+# CRITICAL: Suppress TTS interactive prompts BEFORE any imports
 os.environ['TTS_HOME'] = '/tmp/tts_models'
-os.environ['TTS_CPML'] = '1'  # Auto-accept CPML license for non-commercial use
-# Disable interactive prompts completely
+os.environ['TTS_CPML'] = '1'
 os.environ['TTS_SKIP_TOS'] = '1'
+os.environ['TTS_DISABLE_WEB_VERSION_PROMPT'] = '1'
+os.environ['COQUI_TOS_AGREED'] = '1'
+
+# Monkey-patch input() to auto-answer prompts non-interactively
+_original_input = builtins.input
+def _auto_input(prompt=""):
+    """Auto-answer 'y' to all prompts without blocking."""
+    sys.stderr.write(prompt + "y\n")
+    sys.stderr.flush()
+    return "y"
+
+builtins.input = _auto_input
 
 import gc
 import torch
