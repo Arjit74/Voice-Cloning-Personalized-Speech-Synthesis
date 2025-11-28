@@ -3,9 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Mic, Volume2, Brain, Globe, Zap, Users, Sparkles, Sun, Moon, ArrowDown } from 'lucide-react';
+import { Mic, Volume2, Brain, Globe, Zap, Users, Sparkles, Sun, Moon, ArrowDown, Music } from 'lucide-react';
 import VoiceEnrollment from '@/components/forms/VoiceEnrollment';
 import SpeechSynthesis from '@/components/forms/SpeechSynthesis';
+import { SongGeneration } from '@/components/forms/SongGeneration';
 import ParticleField from '@/components/three/ParticleField';
 import FloatingElements from '@/components/three/FloatingElements';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
@@ -21,6 +22,7 @@ interface Voice {
 
 const Index = () => {
   const [enrolledVoices, setEnrolledVoices] = useState<Voice[]>([]);
+  const [language, setLanguage] = useState<'english' | 'hindi'>('english');
   const { toast } = useToast();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   
@@ -199,14 +201,21 @@ const Index = () => {
           </div>
 
           <Tabs defaultValue="enroll" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-8">
+            <TabsList className="grid w-full grid-cols-3 mb-8">
               <TabsTrigger value="enroll" className="flex items-center space-x-2">
                 <Users className="w-4 h-4" />
-                <span>Voice Enrollment</span>
+                <span className="hidden sm:inline">Voice Enrollment</span>
+                <span className="sm:hidden">Enroll</span>
               </TabsTrigger>
               <TabsTrigger value="synthesize" className="flex items-center space-x-2">
                 <Volume2 className="w-4 h-4" />
-                <span>Speech Synthesis</span>
+                <span className="hidden sm:inline">Speech Synthesis</span>
+                <span className="sm:hidden">Speak</span>
+              </TabsTrigger>
+              <TabsTrigger value="song" className="flex items-center space-x-2">
+                <Music className="w-4 h-4" />
+                <span className="hidden sm:inline">Song Generation</span>
+                <span className="sm:hidden">Song</span>
               </TabsTrigger>
             </TabsList>
 
@@ -264,6 +273,35 @@ const Index = () => {
                     </Button>
                   </CardContent>
                 </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="song" className="space-y-6">
+              {enrolledVoices.length === 0 ? (
+                <Card className="glass-effect border-dashed border-accent/50">
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <Music className="w-16 h-16 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-medium mb-2">No voices enrolled</h3>
+                    <p className="text-muted-foreground text-center mb-4">
+                      Enroll your voice first to convert songs to your voice
+                    </p>
+                    <Button 
+                      variant="outline"
+                      onClick={() => {
+                        const enrollTab = document.querySelector('[value="enroll"]') as HTMLElement;
+                        enrollTab?.click();
+                      }}
+                    >
+                      Go to Voice Enrollment
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <SongGeneration 
+                  voices={enrolledVoices}
+                  language={language}
+                  onLanguageChange={setLanguage}
+                />
               )}
             </TabsContent>
           </Tabs>

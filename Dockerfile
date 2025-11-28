@@ -5,25 +5,26 @@ RUN apt-get update && apt-get install -y \
     libsndfile1 \
     libsndfile1-dev \
     ffmpeg \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy requirements
-COPY requirements.txt .
+# Copy backend requirements first
+COPY backend/requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir gunicorn
 
-# Copy application
+# Copy entire application
 COPY . .
 
-# Expose port
-EXPOSE 8000
+# Download models on build
+RUN cd backend && python download_models.py
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/api/health')"
+# Expose port for HuggingFace Spaces (uses 7860)
+EXPOSE 7860
 
-# Run with gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "300", "--access-logfile", "-", "--error-logfile", "-", "api_server:app"]
+# Run gunicorn with optimized settings for limited memory
+CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--workers", "2", "--timeout", "300", "--access-logfile", "-", "--error-logfile", "-", "backend.wsgi:app"]

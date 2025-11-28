@@ -407,3 +407,208 @@ def get_waveform(audio_filename):
         err_msg = f'Failed to generate waveform: {str(e)}'
         return jsonify({'error': err_msg}), 500
 
+
+# =====================
+# SONG CONVERSION ROUTES
+# =====================
+
+@bp.route('/convert_song', methods=['POST'])
+def convert_song():
+    """
+    Convert a song to use the user's enrolled voice.
+    
+    Process:
+    1. Separate vocals from instrumental using Demucs
+    2. Extract/prepare lyrics from vocal
+    3. Synthesize using user's voice
+    4. Mix synthesized vocal with instrumental
+    5. Apply optional audio effects
+    
+    Args (form data):
+        song: MP3/WAV/M4A/FLAC file
+        voice_id: ID of enrolled voice to use
+        language: 'english' or 'hindi'
+        add_effects: 'true'/'false' to add reverb/compression
+    
+    Returns:
+        {
+            "status": "success",
+            "audio_url": "/api/audio/converted_song_[uuid].wav",
+            "filename": "converted_song_[uuid].wav"
+        }
+    """
+    try:
+        # Validate request
+        if 'song' not in request.files:
+            return jsonify({'error': 'No song file provided'}), 400
+        
+        if 'voice_id' not in request.form:
+            return jsonify({'error': 'No voice_id provided'}), 400
+        
+        song_file = request.files['song']
+        voice_id = request.form.get('voice_id')
+        language = request.form.get('language', 'english')
+        add_effects = request.form.get('add_effects', 'true').lower() == 'true'
+        
+        # Validate file
+        if song_file.filename == '':
+            return jsonify({'error': 'No song file selected'}), 400
+        
+        if not allowed_file(song_file.filename):
+            return jsonify({'error': f'Unsupported file format. Allowed: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
+        
+        # Check if voice exists
+        voices = load_voices_db()
+        voice_record = next((v for v in voices if v['id'] == voice_id), None)
+        if not voice_record:
+            return jsonify({'error': f'Voice not found: {voice_id}'}), 404
+        
+        voice_path = UPLOAD_FOLDER / voice_record['file']
+        if not voice_path.exists():
+            return jsonify({'error': f'Voice file missing: {voice_path}'}), 500
+        
+        # Save uploaded song temporarily
+        song_filename = f"temp_song_{uuid.uuid4()}.{song_file.filename.rsplit('.', 1)[1].lower()}"
+        song_path = OUTPUT_FOLDER / song_filename
+        song_file.save(song_path)
+        
+        print(f"\n[API] Song conversion request:")
+        print(f"[API]   Voice: {voice_id} ({voice_record['name']})")
+        print(f"[API]   Language: {language}")
+        print(f"[API]   Effects: {add_effects}")
+        print(f"[API]   Song: {song_path}")
+        
+        # Process song
+        try:
+            from app.song_conversion.song_processor import SongProcessor
+            
+            processor = SongProcessor(models_dir=MODELS_DIR)
+            
+            output_filename = f"converted_song_{uuid.uuid4()}.wav"
+            output_path = OUTPUT_FOLDER / output_filename
+            
+            result_path = processor.convert_song(
+                song_path=song_path,
+                voice_path=voice_path,
+                output_path=output_path,
+                language=language,
+                add_effects=add_effects,
+                models_dir=MODELS_DIR
+            )
+            
+            # Clean up temp song file
+            try:
+                song_path.unlink()
+            except Exception as e:
+                print(f"[API] Warning: Failed to clean temp song: {e}")
+            
+            print(f"[API] Conversion successful: {result_path}")
+            
+            return jsonify({
+                'status': 'success',
+                'audio_url': f'/api/audio/{output_filename}',
+                'filename': output_filename
+            }), 200
+            
+        except ImportError as ie:
+            return jsonify({'error': f'Song conversion module not available: {str(ie)}'}), 500
+        except Exception as e:
+            print(f"[API] Conversion error: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': f'Song conversion failed: {str(e)}'}), 500
+    
+    except Exception as e:
+        print(f"[API] Unexpected error in /convert_song: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+
+@bp.route('/separate_vocals', methods=['POST'])
+def separate_vocals():
+    """
+    Separate vocals from instrumental (for preview/debugging).
+    
+    Args (form data):
+        song: MP3/WAV/M4A/FLAC file
+    
+    Returns:
+        {
+            "status": "success",
+            "vocal_url": "/api/audio/vocals_[uuid].wav",
+            "instrumental_url": "/api/audio/instrumental_[uuid].wav"
+        }
+    """
+    try:
+        # Validate request
+        if 'song' not in request.files:
+            return jsonify({'error': 'No song file provided'}), 400
+        
+        song_file = request.files['song']
+        
+        # Validate file
+        if song_file.filename == '':
+            return jsonify({'error': 'No song file selected'}), 400
+        
+        if not allowed_file(song_file.filename):
+            return jsonify({'error': f'Unsupported file format. Allowed: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
+        
+        # Save uploaded song temporarily
+        song_filename = f"temp_song_{uuid.uuid4()}.{song_file.filename.rsplit('.', 1)[1].lower()}"
+        song_path = OUTPUT_FOLDER / song_filename
+        song_file.save(song_path)
+        
+        print(f"\n[API] Vocal separation request for: {song_path}")
+        
+        # Process song
+        try:
+            from app.song_conversion.vocal_separator import VocalSeparator
+            import soundfile as sf
+            
+            separator = VocalSeparator(model_name="htdemucs")
+            
+            vocal_filename = f"vocals_{uuid.uuid4()}.wav"
+            instrumental_filename = f"instrumental_{uuid.uuid4()}.wav"
+            
+            vocal_path = OUTPUT_FOLDER / vocal_filename
+            instrumental_path = OUTPUT_FOLDER / instrumental_filename
+            
+            separator.separate_and_save(
+                song_path,
+                vocal_path,
+                instrumental_path,
+                sr=16000
+            )
+            
+            # Clean up temp song file
+            try:
+                song_path.unlink()
+            except Exception as e:
+                print(f"[API] Warning: Failed to clean temp song: {e}")
+            
+            print(f"[API] Separation successful:")
+            print(f"[API]   Vocals: {vocal_path}")
+            print(f"[API]   Instrumental: {instrumental_path}")
+            
+            return jsonify({
+                'status': 'success',
+                'vocal_url': f'/api/audio/{vocal_filename}',
+                'instrumental_url': f'/api/audio/{instrumental_filename}'
+            }), 200
+            
+        except ImportError as ie:
+            return jsonify({'error': f'Vocal separator not available: {str(ie)}'}), 500
+        except Exception as e:
+            print(f"[API] Separation error: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': f'Vocal separation failed: {str(e)}'}), 500
+    
+    except Exception as e:
+        print(f"[API] Unexpected error in /separate_vocals: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+

@@ -12,3 +12,5 @@ scipy>=1.6.0
 scikit-learn>=1.1.0
 unidecode>=1.2.0
 inflect>=6.0.0
+demucs>=4.0.0
+pydub>=0.25.1
