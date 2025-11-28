@@ -7,7 +7,9 @@ services:
     buildCommand: |
       cd backend && pip install -r requirements.txt && python download_models.py
     startCommand: |
-      gunicorn backend.wsgi:app --timeout 120
+      cd /opt/render/project/src && gunicorn backend.wsgi:app --timeout 120 --bind 0.0.0.0:10000
     envVars:
       - key: HF_HOME
         value: /opt/render/project/.cache/huggingface
+      - key: PYTHONPATH
+        value: /opt/render/project/src

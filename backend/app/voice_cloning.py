@@ -10,10 +10,18 @@ import numpy as np
 import soundfile as sf
 from huggingface_hub import hf_hub_download
 
-from ..encoder import inference as encoder_infer
-from ..synthesizer import inference as synthesizer_infer
-from ..synthesizer.hparams import hparams as syn_hp
-from .vocoder import inference as vocoder_infer
+try:
+    # When imported as a package (from backend.app.voice_cloning)
+    from ..encoder import inference as encoder_infer
+    from ..synthesizer import inference as synthesizer_infer
+    from ..synthesizer.hparams import hparams as syn_hp
+    from .vocoder import inference as vocoder_infer
+except ImportError:
+    # When backend is in sys.path (from app.voice_cloning)
+    from encoder import inference as encoder_infer
+    from synthesizer import inference as synthesizer_infer
+    from synthesizer.hparams import hparams as syn_hp
+    from app.vocoder import inference as vocoder_infer
 
 
 MODEL_SPECS: Dict[str, Tuple[str, str]] = {
