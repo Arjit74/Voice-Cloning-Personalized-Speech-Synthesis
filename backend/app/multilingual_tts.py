@@ -81,7 +81,7 @@ class MultilingualTTSService:
             print("[MultilingualTTSService] ✓ English vocoder loaded")
     
     def _load_hindi_models(self):
-        """Load Hindi XTTS model (lazy load)."""
+        """Load Hindi XTTS model (lazy load with auto-download)."""
         if not self.hindi_model_dir:
             raise RuntimeError("Hindi model not configured. Set hindi_model_dir path.")
         
@@ -96,8 +96,28 @@ class MultilingualTTSService:
                 )
             
             config_path = self.hindi_model_dir / "config.json"
+            
+            # Auto-download from HuggingFace Hub if model files missing
             if not config_path.exists():
-                raise RuntimeError(f"Hindi model config missing: {config_path}")
+                print("[MultilingualTTSService] Model files not found. Downloading from HuggingFace Hub...")
+                try:
+                    from huggingface_hub import snapshot_download
+                    
+                    # Download XTTS-v2 model from HF Hub
+                    snapshot_download(
+                        repo_id="coqui/XTTS-v2",
+                        cache_dir=str(self.hindi_model_dir.parent),
+                        local_dir=str(self.hindi_model_dir),
+                        local_dir_use_symlinks=False,  # Avoid symlinks for HF Spaces
+                    )
+                    print("[MultilingualTTSService] ✓ Model downloaded from HuggingFace Hub")
+                except ImportError:
+                    raise ImportError(
+                        "huggingface_hub library required for auto-download. "
+                        "Install with: pip install huggingface_hub"
+                    )
+                except Exception as e:
+                    raise RuntimeError(f"Failed to download Hindi model: {e}")
             
             # Load XTTS model
             self._xtts_model = TTS(
