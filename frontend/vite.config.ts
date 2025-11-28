@@ -25,11 +25,11 @@ export default defineConfig(({ mode }) => ({
     },
   },
   optimizeDeps: {
-    exclude: ['@splinetool/runtime']
+    include: ['@splinetool/react-spline']
   },
   build: {
     rollupOptions: {
-      external: ['@splinetool/runtime']
+      external: []
     }
   },
 }));
