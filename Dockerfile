@@ -15,9 +15,9 @@ WORKDIR /app
 # Copy backend requirements first
 COPY backend/requirements.txt .
 
-# Install Python dependencies with pre-built wheels priority
-RUN pip install --no-cache-dir --only-binary :all: -r requirements.txt; \
-    pip install --no-cache-dir gunicorn || true
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir gunicorn
 
 # Copy entire application
 COPY . .
