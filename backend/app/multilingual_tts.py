@@ -1,12 +1,20 @@
 """Multilingual TTS Service - Supports English (WaveRNN) and Hindi (XTTS)."""
 
+import os
+import sys
+
+# Set environment variables BEFORE any TTS imports to bypass CPML prompt
+os.environ['TTS_HOME'] = '/tmp/tts_models'
+os.environ['TTS_CPML'] = '1'  # Auto-accept CPML license for non-commercial use
+# Disable interactive prompts completely
+os.environ['TTS_SKIP_TOS'] = '1'
+
 import gc
 import torch
 import numpy as np
 from pathlib import Path
 from typing import Optional, Union
 from enum import Enum
-import sys
 
 
 class Language(str, Enum):
@@ -93,13 +101,8 @@ class MultilingualTTSService:
                 )
             
             try:
-                # Set environment variables to bypass interactive CPML agreement prompt
-                import os
-                os.environ['TTS_HOME'] = '/tmp/tts_models'  # Cache models in /tmp
-                os.environ['TTS_CPML'] = '1'  # Accept CPML license non-commercially
-                
-                # Let TTS library handle model download automatically
-                # It will use its built-in model cache and download from Hugging Face
+                # Environment variables already set at module level
+                # TTS_HOME, TTS_CPML, TTS_SKIP_TOS are configured at top of file
                 print("[MultilingualTTSService] Loading XTTS-v2 model (may auto-download if needed)...")
                 self._xtts_model = TTS(
                     model_name="tts_models/multilingual/multi-dataset/xtts_v2",
