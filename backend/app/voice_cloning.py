@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import shutil
+import gc
+import torch
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -84,5 +86,23 @@ def synthesize(voice_path: Path, text: str, models_dir: Path, out_path: Path) ->
     out_path.parent.mkdir(parents=True, exist_ok=True)
     sf.write(out_path.as_posix(), waveform, syn_hp.sample_rate)
     print(f"[VoiceCloning] Audio saved to {out_path}")
+    
+    # Memory optimization for Render free tier
+    print("[VoiceCloning] Cleaning up models to free memory...")
+    try:
+        # Clear model caches
+        if hasattr(encoder_infer, '_model'):
+            encoder_infer._model = None
+        if hasattr(synthesizer_infer, '_model'):
+            synthesizer_infer._model = None
+        if hasattr(vocoder_infer, '_model'):
+            vocoder_infer._model = None
+        
+        # Force garbage collection
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception as e:
+        print(f"[VoiceCloning] Warning during cleanup: {e}")
 
     return out_path

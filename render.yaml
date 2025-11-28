@@ -7,7 +7,7 @@ services:
     buildCommand: |
       cd backend && pip install -r requirements.txt && python download_models.py
     startCommand: |
-      cd backend && gunicorn wsgi:app --workers 2 --timeout 120 --bind 0.0.0.0:8000
+      cd backend && gunicorn wsgi:app --workers 1 --timeout 300 --bind 0.0.0.0:8000
     envVars:
       - key: HF_HOME
         value: /opt/render/project/.cache/huggingface
