@@ -204,12 +204,27 @@ class MultilingualTTSService:
         
         print(f"[MultilingualTTSService] Synthesizing Hindi: {text[:50]}...")
         
-        # XTTS synthesize
-        audio = self._xtts_model.tts(
-            text=text,
-            speaker_wav=str(voice_sample_path),
-            language="hi"
-        )
+        # XTTS language support check
+        # Try different language code formats
+        try:
+            audio = self._xtts_model.tts(
+                text=text,
+                speaker_wav=str(voice_sample_path),
+                language="hi"  # Try ISO 639-1 code
+            )
+        except NotImplementedError:
+            print("[MultilingualTTSService] Language code 'hi' not supported, trying 'hindi'...")
+            try:
+                audio = self._xtts_model.tts(
+                    text=text,
+                    speaker_wav=str(voice_sample_path),
+                    language="hindi"  # Try full language name
+                )
+            except NotImplementedError:
+                raise RuntimeError(
+                    "Hindi language not supported in this XTTS version. "
+                    "XTTS-v2 may only support: en, es, fr, de, it, pt, pl, tr, ru, nl, zh-cn, zh-tw, ar, cs, el, hu, ko, ja"
+                )
         
         # Convert to float32 if needed
         audio = np.asarray(audio, dtype=np.float32)
