@@ -99,7 +99,6 @@ def enroll_voice():
             'id': voice_id,
             'name': voice_name,
             'filename': filename,
-            'filepath': str(filepath),
             'createdAt': datetime.now().isoformat()
         }
         
@@ -178,10 +177,8 @@ def synthesize_speech():
         if not voice:
             return jsonify({'error': 'Voice not found'}), 404
         
-        # Convert to absolute path
-        voice_filepath = Path(voice['filepath'])
-        if not voice_filepath.is_absolute():
-            voice_filepath = Path.cwd() / voice_filepath
+        # Reconstruct path from UPLOAD_FOLDER (server-agnostic)
+        voice_filepath = UPLOAD_FOLDER / voice['filename']
             
         if not voice_filepath.exists():
             return jsonify({'error': f'Voice file not found: {voice_filepath}'}), 404
@@ -269,7 +266,7 @@ def delete_voice(voice_id):
             return jsonify({'error': 'Voice not found'}), 404
         
         # Delete the audio file
-        voice_filepath = Path(voice['filepath'])
+        voice_filepath = UPLOAD_FOLDER / voice['filename']
         if voice_filepath.exists():
             voice_filepath.unlink()
         
