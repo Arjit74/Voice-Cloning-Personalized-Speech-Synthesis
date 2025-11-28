@@ -5,7 +5,7 @@ services:
     pythonVersion: 3.10
     plan: free
     buildCommand: |
-      pip install -r backend/requirements.txt && python download_models.py
+      cd backend && pip install -r requirements.txt && python download_models.py
     startCommand: |
       cd backend && gunicorn wsgi:app --timeout 120
     envVars:
