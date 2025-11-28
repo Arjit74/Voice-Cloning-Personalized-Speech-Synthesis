@@ -24,23 +24,8 @@ OUTPUT_FOLDER = BASE_DIR / 'outputs'
 MODELS_DIR = BASE_DIR / 'models'
 VOICES_DB = UPLOAD_FOLDER / 'voices.json'
 
-# Hindi model directory (check multiple possible locations)
-HINDI_MODEL_DIR = None
-possible_hindi_dirs = [
-    Path(os.getenv('HINDI_MODEL_PATH', '')) if os.getenv('HINDI_MODEL_PATH') else None,
-    BASE_DIR.parent / 'Apoorv_hindi_model' / 'models' / 'xtts_hindi',  # Local development
-    BASE_DIR / 'models' / 'xtts_hindi',  # Alternative location
-]
-for path in possible_hindi_dirs:
-    if path and path.exists():
-        HINDI_MODEL_DIR = path
-        print(f"✓ Hindi model found at: {HINDI_MODEL_DIR}")
-        break
-
-if not HINDI_MODEL_DIR:
-    print("⚠ Hindi model not found. Hindi synthesis will be unavailable.")
-    print("  To enable Hindi support, set HINDI_MODEL_PATH environment variable")
-    print("  or place model at: Apoorv_hindi_model/models/xtts_hindi")
+# Note: Hindi model is auto-downloaded via TTS library on first use
+# No pre-configuration needed - TTS handles model management
 
 # Create directories with parents
 try:
@@ -204,13 +189,6 @@ def synthesize_speech():
         if language not in ['english', 'hindi']:
             return jsonify({'error': f'Unsupported language: {language}. Supported: english, hindi'}), 400
         
-        # Check if Hindi model is available for Hindi synthesis
-        if language == 'hindi' and not HINDI_MODEL_DIR:
-            return jsonify({
-                'error': 'Hindi synthesis unavailable. Hindi model not configured.',
-                'available_languages': ['english']
-            }), 503
-        
         # Find the voice in database
         voices = load_voices_db()
         voice = next((v for v in voices if v['id'] == voice_id), None)
@@ -246,11 +224,11 @@ def synthesize_speech():
                     out_path=output_path
                 )
             else:
-                # Use multilingual TTS for Hindi
+                # Use multilingual TTS for Hindi (auto-downloads model via TTS library)
                 from app.multilingual_tts import MultilingualTTSService
                 tts_service = MultilingualTTSService(
                     models_dir=MODELS_DIR,
-                    hindi_model_dir=HINDI_MODEL_DIR
+                    hindi_model_dir=None  # Not needed - TTS auto-manages model download
                 )
                 tts_service.synthesize_and_save(
                     text=text,
@@ -541,7 +519,7 @@ def convert_song():
             
             processor = MultilingualSongProcessor(
                 models_dir=MODELS_DIR,
-                hindi_model_dir=HINDI_MODEL_DIR if language == 'hindi' else None
+                hindi_model_dir=None  # Not needed - TTS auto-manages model download
             )
             
             output_filename = f"converted_song_{uuid.uuid4()}.wav"
