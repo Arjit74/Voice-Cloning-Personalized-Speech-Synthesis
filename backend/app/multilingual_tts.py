@@ -2,24 +2,33 @@
 
 import os
 import sys
-import builtins
 
-# CRITICAL: Suppress TTS interactive prompts BEFORE any imports
+# Set environment variables BEFORE any TTS imports to bypass CPML prompt
 os.environ['TTS_HOME'] = '/tmp/tts_models'
 os.environ['TTS_CPML'] = '1'
 os.environ['TTS_SKIP_TOS'] = '1'
 os.environ['TTS_DISABLE_WEB_VERSION_PROMPT'] = '1'
 os.environ['COQUI_TOS_AGREED'] = '1'
 
-# Monkey-patch input() to auto-answer prompts non-interactively
-_original_input = builtins.input
-def _auto_input(prompt=""):
-    """Auto-answer 'y' to all prompts without blocking."""
-    sys.stderr.write(prompt + "y\n")
-    sys.stderr.flush()
-    return "y"
-
-builtins.input = _auto_input
+# Create a silent TTS manager that handles model initialization without prompts
+def _create_silent_tts_manager():
+    """Create a TTS manager configured to skip all interactive prompts."""
+    try:
+        from TTS.utils.manage import ModelManager
+        from pathlib import Path
+        
+        # Set model manager to use our TTS_HOME directory
+        model_dir = Path(os.environ.get('TTS_HOME', '/tmp/tts_models'))
+        model_dir.mkdir(parents=True, exist_ok=True)
+        
+        manager = ModelManager(model_name="tts_models/multilingual/multi-dataset/xtts_v2")
+        # Mark TOS as agreed in the manager to prevent prompts
+        manager.tos_agreed = True
+        
+        return manager, model_dir
+    except Exception as e:
+        print(f"[WARNING] Could not create silent TTS manager: {e}")
+        return None, None
 
 import gc
 import torch
@@ -106,21 +115,29 @@ class MultilingualTTSService:
             print("[MultilingualTTSService] Loading Hindi XTTS model...")
             try:
                 from TTS.api import TTS
+                import io
+                
+                print("[MultilingualTTSService] Loading XTTS-v2 model (may auto-download if needed)...")
+                
+                # Suppress stdin to prevent interactive prompts
+                # This is the most reliable way that works in Docker/HF Spaces
+                old_stdin = sys.stdin
+                sys.stdin = io.StringIO("y\n")  # Auto-answer "y" if prompted
+                
+                try:
+                    self._xtts_model = TTS(
+                        model_name="tts_models/multilingual/multi-dataset/xtts_v2",
+                        gpu=False  # Set to True if CUDA available and needed
+                    )
+                    print("[MultilingualTTSService] ✓ Hindi XTTS loaded successfully")
+                finally:
+                    sys.stdin = old_stdin  # Restore stdin
+                    
             except ImportError:
                 raise ImportError(
                     "TTS library required for Hindi support. "
                     "Install with: pip install TTS>=0.21.0"
                 )
-            
-            try:
-                # Environment variables already set at module level
-                # TTS_HOME, TTS_CPML, TTS_SKIP_TOS are configured at top of file
-                print("[MultilingualTTSService] Loading XTTS-v2 model (may auto-download if needed)...")
-                self._xtts_model = TTS(
-                    model_name="tts_models/multilingual/multi-dataset/xtts_v2",
-                    gpu=False  # Set to True if CUDA available and needed
-                )
-                print("[MultilingualTTSService] ✓ Hindi XTTS loaded successfully")
             except Exception as e:
                 print(f"[MultilingualTTSService] Error loading XTTS model: {e}")
                 raise RuntimeError(f"Failed to load Hindi XTTS model: {e}")
