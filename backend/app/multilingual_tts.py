@@ -95,18 +95,15 @@ class MultilingualTTSService:
             try:
                 # Set environment variables to bypass interactive CPML agreement prompt
                 import os
-                os.environ['TTS_HOME'] = '/tmp/tts_models'  # Cache models in /tmp for non-persistent storage
+                os.environ['TTS_HOME'] = '/tmp/tts_models'  # Cache models in /tmp
                 os.environ['TTS_CPML'] = '1'  # Accept CPML license non-commercially
                 
                 # Let TTS library handle model download automatically
                 # It will use its built-in model cache and download from Hugging Face
-                # Model name: "tts_models/multilingual/multi-dataset/xtts_v2"
                 print("[MultilingualTTSService] Loading XTTS-v2 model (may auto-download if needed)...")
                 self._xtts_model = TTS(
                     model_name="tts_models/multilingual/multi-dataset/xtts_v2",
-                    gpu=False,  # Set to True if CUDA available and needed
-                    progress_bar=True,
-                    in_memory=False  # Save to disk to preserve across requests
+                    gpu=False  # Set to True if CUDA available and needed
                 )
                 print("[MultilingualTTSService] ✓ Hindi XTTS loaded successfully")
             except Exception as e:
