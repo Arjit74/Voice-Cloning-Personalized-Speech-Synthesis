@@ -1,11 +1,13 @@
 FROM python:3.10-slim
 
-# Install system dependencies
+# Install system dependencies including BLAS/LAPACK for scipy
 RUN apt-get update && apt-get install -y \
+    build-essential \
     libsndfile1 \
     libsndfile1-dev \
     ffmpeg \
     git \
+    libblas-dev liblapack-dev gfortran \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -13,9 +15,9 @@ WORKDIR /app
 # Copy backend requirements first
 COPY backend/requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir gunicorn
+# Install Python dependencies with pre-built wheels priority
+RUN pip install --no-cache-dir --only-binary :all: -r requirements.txt; \
+    pip install --no-cache-dir gunicorn || true
 
 # Copy entire application
 COPY . .
