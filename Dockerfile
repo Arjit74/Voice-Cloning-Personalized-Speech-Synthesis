@@ -20,8 +20,10 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 # Copy entire application
 COPY . .
 
-# Download models on build
-RUN cd backend && python download_models.py
+# Note: Models will be downloaded on first request
+# Skipping download_models.py to avoid build timeout on HF Spaces
+# - English models: Downloaded via hf_hub_download on first voice enrollment/synthesis
+# - Hindi XTTS: Downloaded via TTS library on first Hindi synthesis request
 
 # Expose port for HuggingFace Spaces (uses 7860)
 EXPOSE 7860

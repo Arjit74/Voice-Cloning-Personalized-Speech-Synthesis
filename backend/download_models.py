@@ -22,6 +22,8 @@ def download_models(models_dir: Path) -> None:
     
     print(f"[Models] Target directory: {target_dir}")
     
+    failed_models = []
+    
     for filename, (repo_id, repo_filename) in MODEL_SPECS.items():
         destination = target_dir / filename
         
@@ -41,10 +43,16 @@ def download_models(models_dir: Path) -> None:
             print(f"✓ Saved {filename} ({size_mb:.1f} MB) to {destination}")
         except Exception as e:
             print(f"✗ Failed to download {filename}: {e}")
-            return False
+            failed_models.append(filename)
+            print(f"  Models will be downloaded on first request")
     
-    print("[Models] All models downloaded successfully!")
-    return True
+    if failed_models:
+        print(f"\n⚠ {len(failed_models)} model(s) failed to download during build")
+        print(f"  These will be downloaded on first use")
+        return False
+    else:
+        print("[Models] All models downloaded successfully!")
+        return True
 
 if __name__ == "__main__":
     backend_dir = Path(__file__).parent
