@@ -2,6 +2,8 @@
 
 import os
 import sys
+import shutil
+import subprocess
 
 # Set environment variables BEFORE any TTS imports to bypass CPML prompt
 os.environ['TTS_HOME'] = '/tmp/tts_models'
@@ -9,6 +11,82 @@ os.environ['TTS_CPML'] = '1'
 os.environ['TTS_SKIP_TOS'] = '1'
 os.environ['TTS_DISABLE_WEB_VERSION_PROMPT'] = '1'
 os.environ['COQUI_TOS_AGREED'] = '1'
+
+# Google Drive folder containing XTTS v2 model
+# https://drive.google.com/drive/folders/15g0ICOEAAy5mJhsvoEjCHAXNfttkwp_K?usp=drive_link
+GOOGLE_DRIVE_FOLDER_ID = "15g0ICOEAAy5mJhsvoEjCHAXNfttkwp_K"
+XTTS_MODEL_DIR = "/tmp/tts_models/tts_models--multilingual--multi-dataset--xtts_v2"
+
+def _download_from_google_drive(folder_id: str, output_dir: str) -> bool:
+    """
+    Download XTTS v2 model from Google Drive using gdown.
+    
+    Args:
+        folder_id: Google Drive folder ID
+        output_dir: Directory to save files
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        import gdown
+        
+        output_dir = os.path.expanduser(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+        
+        print(f"\n[XTTS Download] Starting download from Google Drive...")
+        print(f"[XTTS Download] Folder ID: {folder_id}")
+        print(f"[XTTS Download] Output: {output_dir}")
+        print(f"[XTTS Download] This may take 3-5 minutes...")
+        sys.stdout.flush()
+        
+        # Download entire folder
+        gdown.download_folder(
+            id=folder_id,
+            output=output_dir,
+            quiet=False,
+            use_cookies=False
+        )
+        
+        print(f"\n[XTTS Download] ✓ Download completed successfully!")
+        sys.stdout.flush()
+        return True
+        
+    except ImportError:
+        print("[XTTS Download] gdown not installed. Attempting pip install...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "gdown", "-q"])
+            print("[XTTS Download] gdown installed. Retrying download...")
+            return _download_from_google_drive(folder_id, output_dir)
+        except Exception as e:
+            print(f"[XTTS Download] Failed to install gdown: {e}")
+            return False
+    except Exception as e:
+        print(f"[XTTS Download] Error downloading model: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def _check_xtts_model_exists() -> bool:
+    """Check if XTTS v2 model files exist locally."""
+    required_files = [
+        "model.pth",
+        "config.json",
+        "vocab.json",
+        "speakers_xtts.pth"
+    ]
+    
+    model_dir = XTTS_MODEL_DIR
+    if not os.path.exists(model_dir):
+        return False
+    
+    for filename in required_files:
+        if not os.path.exists(os.path.join(model_dir, filename)):
+            print(f"[XTTS Check] Missing: {filename}")
+            return False
+    
+    print(f"[XTTS Check] ✓ All XTTS v2 model files present")
+    return True
 
 # Create a silent TTS manager that handles model initialization without prompts
 def _create_silent_tts_manager():
@@ -110,23 +188,37 @@ class MultilingualTTSService:
             print("[MultilingualTTSService] ✓ English vocoder loaded")
     
     def _load_hindi_models(self):
-        """Load Hindi XTTS model - supports voice cloning."""
+        """Load Hindi XTTS model - supports voice cloning. Downloads from Google Drive on first use."""
         if self._xtts_model is None:
             print("[MultilingualTTSService] Loading Hindi XTTS model...")
+            
+            # Check if model exists locally
+            if not _check_xtts_model_exists():
+                print("[MultilingualTTSService] XTTS v2 model not found locally. Downloading...")
+                if not _download_from_google_drive(GOOGLE_DRIVE_FOLDER_ID, XTTS_MODEL_DIR):
+                    raise RuntimeError(
+                        "Failed to download XTTS v2 model from Google Drive. "
+                        "Please try again later."
+                    )
+            
             try:
                 from TTS.api import TTS
                 
                 # XTTS v2: Multilingual TTS with voice cloning support
                 # Supports 13+ languages including Hindi
+                # No prompts - all environment variables set at top
+                print("[MultilingualTTSService] Initializing XTTS v2...")
                 self._xtts_model = TTS(
                     model_name="tts_models/multilingual/multi-dataset/xtts_v2",
                     gpu=False,
-                    progress_bar=False
+                    progress_bar=False,
+                    in_memory=True
                 )
                 print("[MultilingualTTSService] ✓ Hindi XTTS v2 loaded successfully")
                 print("[MultilingualTTSService]   Model: XTTS v2 (Multilingual)")
                 print("[MultilingualTTSService]   Language: Hindi with voice cloning")
                 print("[MultilingualTTSService]   Voice Cloning: YES - uses enrolled voice")
+                print("[MultilingualTTSService]   Ready for synthesis!")
                     
             except ImportError:
                 raise ImportError(
@@ -135,6 +227,8 @@ class MultilingualTTSService:
                 )
             except Exception as e:
                 print(f"[MultilingualTTSService] Error loading Hindi XTTS: {e}")
+                import traceback
+                traceback.print_exc()
                 raise RuntimeError(f"Failed to load Hindi XTTS model: {e}")
     
     def synthesize(self, text: str, voice_sample_path: Union[str, Path],

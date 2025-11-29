@@ -224,12 +224,18 @@ def synthesize_speech():
                     out_path=output_path
                 )
             else:
-                # Use multilingual TTS for Hindi (auto-downloads model via TTS library)
+                # Use multilingual TTS for Hindi (downloads model on first use via Google Drive)
+                print(f"[API /synthesize] Hindi first-time setup: Model will be downloaded if needed (3-5 minutes)...")
+                sys.stdout.flush()
+                
                 from app.multilingual_tts import MultilingualTTSService
                 tts_service = MultilingualTTSService(
                     models_dir=MODELS_DIR,
                     hindi_model_dir=None  # Not needed - TTS auto-manages model download
                 )
+                print(f"[API /synthesize] Starting Hindi synthesis with voice cloning...")
+                sys.stdout.flush()
+                
                 tts_service.synthesize_and_save(
                     text=text,
                     voice_sample_path=voice_filepath,

@@ -17,3 +17,4 @@ webrtcvad==2.0.10
 demucs==4.0.1
 omegaconf==2.3.0
 gtts==2.4.0
+gdown==5.1.0
