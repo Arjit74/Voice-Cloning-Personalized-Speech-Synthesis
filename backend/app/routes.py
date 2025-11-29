@@ -293,6 +293,33 @@ def get_audio(filename):
         print(f"Error serving audio: {e}")
         return jsonify({'error': f'Failed to serve audio: {str(e)}'}), 500
 
+@bp.route('/voice-audio/<voice_id>', methods=['GET'])
+def get_voice_audio(voice_id):
+    """
+    Serve enrolled voice audio files (for backend-to-backend sync)
+    Used by Hindi backend to download enrolled voices from English backend
+    """
+    try:
+        voices = load_voices_db()
+        voice = next((v for v in voices if v['id'] == voice_id), None)
+        
+        if not voice:
+            return jsonify({'error': 'Voice not found'}), 404
+        
+        filepath = UPLOAD_FOLDER / voice['filename']
+        if not filepath.exists():
+            return jsonify({'error': 'Voice file not found'}), 404
+        
+        return send_file(
+            str(filepath),
+            mimetype='audio/mpeg',
+            as_attachment=False,
+            download_name=voice['filename']
+        )
+    except Exception as e:
+        print(f"Error serving voice audio: {e}")
+        return jsonify({'error': f'Failed to serve voice audio: {str(e)}'}), 500
+
 @bp.route('/voices/<voice_id>', methods=['DELETE'])
 def delete_voice(voice_id):
     """
