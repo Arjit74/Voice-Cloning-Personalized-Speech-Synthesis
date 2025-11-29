@@ -1,26 +1,42 @@
 /**
  * API configuration and utilities
- * Handles all communication with the backend
+ * Handles all communication with the backend with split endpoints for English and Hindi
  */
 
-// Use environment variable or default to localhost:5000
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// Get base URLs for each language
+const API_ENGLISH_URL = import.meta.env.VITE_API_URL_ENGLISH || 'http://localhost:5000';
+const API_HINDI_URL = import.meta.env.VITE_API_URL_HINDI || 'http://localhost:5001';
+
+// Default fallback
+const API_BASE_URL = import.meta.env.VITE_API_URL || API_ENGLISH_URL;
+
+/**
+ * Get the appropriate API URL based on language
+ */
+const getApiUrlForLanguage = (language: string = 'english'): string => {
+  if (language.toLowerCase() === 'hindi') {
+    return API_HINDI_URL;
+  }
+  return API_ENGLISH_URL;
+};
 
 export const api = {
   /**
    * Get the full API URL for an endpoint
+   * Optionally routes to language-specific backend
    */
-  getUrl: (endpoint: string) => {
+  getUrl: (endpoint: string, language: string = 'english') => {
     // Ensure endpoint starts with /
     const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    return `${API_BASE_URL}/api${path}`;
+    const baseUrl = getApiUrlForLanguage(language);
+    return `${baseUrl}/api${path}`;
   },
 
   /**
    * Fetch voices list
    */
-  fetchVoices: async () => {
-    const response = await fetch(api.getUrl('/voices'));
+  fetchVoices: async (language: string = 'english') => {
+    const response = await fetch(api.getUrl('/voices', language));
     if (!response.ok) throw new Error('Failed to fetch voices');
     return response.json();
   },
@@ -28,8 +44,8 @@ export const api = {
   /**
    * Enroll a voice with audio file
    */
-  enrollVoice: async (formData: FormData) => {
-    const response = await fetch(api.getUrl('/enroll'), {
+  enrollVoice: async (formData: FormData, language: string = 'english') => {
+    const response = await fetch(api.getUrl('/enroll', language), {
       method: 'POST',
       body: formData,
     });
@@ -42,9 +58,10 @@ export const api = {
 
   /**
    * Synthesize speech from text (supports multilingual: english, hindi)
+   * Routes to language-specific backend
    */
   synthesize: async (voiceId: string, text: string, language: string = 'english') => {
-    const response = await fetch(api.getUrl('/synthesize'), {
+    const response = await fetch(api.getUrl('/synthesize', language), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -92,16 +109,17 @@ export const api = {
   },
 
   /**
-   * Get audio URL
+   * Get audio URL (defaults to English backend, but can accept language param)
    */
-  getAudioUrl: (audioPath: string) => {
+  getAudioUrl: (audioPath: string, language: string = 'english') => {
     if (audioPath.startsWith('http')) {
       return audioPath; // Already a full URL
     }
+    const baseUrl = getApiUrlForLanguage(language);
     if (audioPath.startsWith('/api')) {
-      return `${API_BASE_URL}${audioPath}`;
+      return `${baseUrl}${audioPath}`;
     }
-    return `${API_BASE_URL}/api/audio/${audioPath}`;
+    return `${baseUrl}/api/audio/${audioPath}`;
   },
 };
 
