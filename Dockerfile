@@ -22,13 +22,11 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 # Copy entire application
 COPY . .
 
-# Note: Models will be downloaded on first request
-# Skipping download_models.py to avoid build timeout on HF Spaces
-# - English models: Downloaded via hf_hub_download on first voice enrollment/synthesis
-# - Hindi XTTS: Downloaded via TTS library on first Hindi synthesis request
-
 # Expose port for HuggingFace Spaces (uses 7860)
 EXPOSE 7860
 
-# Run gunicorn with optimized settings for limited memory
-CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--workers", "2", "--timeout", "300", "--access-logfile", "-", "--error-logfile", "-", "backend.wsgi:app"]
+# Setup models on startup (download if needed)
+RUN echo "#!/bin/bash\npython /app/backend/setup_models.py\ngunicorn --bind 0.0.0.0:7860 --workers 2 --timeout 300 --access-logfile - --error-logfile - backend.wsgi:app" > /app/start.sh && chmod +x /app/start.sh
+
+# Run startup script
+CMD ["/app/start.sh"]

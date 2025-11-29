@@ -110,28 +110,23 @@ class MultilingualTTSService:
             print("[MultilingualTTSService] ✓ English vocoder loaded")
     
     def _load_hindi_models(self):
-        """Load Hindi XTTS model (lazy load with auto-download via TTS library)."""
+        """Load Hindi Facebook MMS model - no TOS required, lightweight."""
         if self._xtts_model is None:
-            print("[MultilingualTTSService] Loading Hindi XTTS model...")
+            print("[MultilingualTTSService] Loading Hindi Facebook MMS model...")
             try:
                 from TTS.api import TTS
-                import io
                 
-                print("[MultilingualTTSService] Loading XTTS-v2 model (may auto-download if needed)...")
-                
-                # Suppress stdin to prevent interactive prompts
-                # This is the most reliable way that works in Docker/HF Spaces
-                old_stdin = sys.stdin
-                sys.stdin = io.StringIO("y\n")  # Auto-answer "y" if prompted
-                
-                try:
-                    self._xtts_model = TTS(
-                        model_name="tts_models/multilingual/multi-dataset/xtts_v2",
-                        gpu=False  # Set to True if CUDA available and needed
-                    )
-                    print("[MultilingualTTSService] ✓ Hindi XTTS loaded successfully")
-                finally:
-                    sys.stdin = old_stdin  # Restore stdin
+                # Facebook MMS: No TOS required, lightweight (200MB vs XTTS 1.8GB)
+                # Downloads once and caches locally
+                self._xtts_model = TTS(
+                    model_name="tts_models/hin/facebook/mms-tts-hin",
+                    gpu=False,
+                    progress_bar=False
+                )
+                print("[MultilingualTTSService] ✓ Hindi Facebook MMS loaded successfully")
+                print("[MultilingualTTSService]   Model: Facebook Massively Multilingual Speech (MMS)")
+                print("[MultilingualTTSService]   Language: Hindi (hin)")
+                print("[MultilingualTTSService]   TOS: No (Open model)")
                     
             except ImportError:
                 raise ImportError(
@@ -139,8 +134,9 @@ class MultilingualTTSService:
                     "Install with: pip install TTS>=0.21.0"
                 )
             except Exception as e:
-                print(f"[MultilingualTTSService] Error loading XTTS model: {e}")
-                raise RuntimeError(f"Failed to load Hindi XTTS model: {e}")
+                print(f"[MultilingualTTSService] Error loading Hindi MMS model: {e}")
+                print(f"[MultilingualTTSService] Make sure TTS library is properly installed")
+                raise RuntimeError(f"Failed to load Hindi MMS model: {e}")
     
     def synthesize(self, text: str, voice_sample_path: Union[str, Path],
                   language: str = "english") -> np.ndarray:
@@ -199,32 +195,21 @@ class MultilingualTTSService:
         return np.clip(synthesized, -1.0, 1.0)
     
     def _synthesize_hindi(self, text: str, voice_sample_path: Union[str, Path]) -> np.ndarray:
-        """Synthesize Hindi speech using XTTS model."""
+        """Synthesize Hindi speech using Facebook MMS model."""
         self._load_hindi_models()
         
         print(f"[MultilingualTTSService] Synthesizing Hindi: {text[:50]}...")
         
-        # XTTS language support check
-        # Try different language code formats
+        # Facebook MMS uses simple TTS interface (no language parameter needed)
+        # MMS model is language-specific, already tuned for Hindi
         try:
             audio = self._xtts_model.tts(
                 text=text,
-                speaker_wav=str(voice_sample_path),
-                language="hi"  # Try ISO 639-1 code
+                speaker_wav=None  # MMS doesn't use speaker adaptation
             )
-        except NotImplementedError:
-            print("[MultilingualTTSService] Language code 'hi' not supported, trying 'hindi'...")
-            try:
-                audio = self._xtts_model.tts(
-                    text=text,
-                    speaker_wav=str(voice_sample_path),
-                    language="hindi"  # Try full language name
-                )
-            except NotImplementedError:
-                raise RuntimeError(
-                    "Hindi language not supported in this XTTS version. "
-                    "XTTS-v2 may only support: en, es, fr, de, it, pt, pl, tr, ru, nl, zh-cn, zh-tw, ar, cs, el, hu, ko, ja"
-                )
+        except Exception as e:
+            print(f"[MultilingualTTSService] Error during Hindi synthesis: {e}")
+            raise RuntimeError(f"Hindi synthesis failed: {e}")
         
         # Convert to float32 if needed
         audio = np.asarray(audio, dtype=np.float32)
