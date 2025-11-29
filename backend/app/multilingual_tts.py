@@ -211,8 +211,7 @@ class MultilingualTTSService:
                 self._xtts_model = TTS(
                     model_name="tts_models/multilingual/multi-dataset/xtts_v2",
                     gpu=False,
-                    progress_bar=False,
-                    in_memory=True
+                    progress_bar=False
                 )
                 print("[MultilingualTTSService] ✓ Hindi XTTS v2 loaded successfully")
                 print("[MultilingualTTSService]   Model: XTTS v2 (Multilingual)")
