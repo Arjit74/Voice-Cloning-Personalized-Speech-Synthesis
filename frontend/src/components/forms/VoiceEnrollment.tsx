@@ -19,6 +19,7 @@ export default function VoiceEnrollment({ onEnrollmentComplete, className = "" }
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [recordedAudio, setRecordedAudio] = useState<{ blob: Blob; url: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [enrollmentLanguage, setEnrollmentLanguage] = useState<'english' | 'hindi'>('english');
   
   const { toast } = useToast();
 
@@ -77,8 +78,8 @@ export default function VoiceEnrollment({ onEnrollmentComplete, className = "" }
         formData.append('audio', file);
       }
 
-      // Call backend API
-      const result = await api.enrollVoice(formData);
+      // Call backend API with language selection
+      const result = await api.enrollVoice(formData, enrollmentLanguage);
 
       const voiceData = {
         id: result.voice_id,
@@ -121,6 +122,32 @@ export default function VoiceEnrollment({ onEnrollmentComplete, className = "" }
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Language Selection */}
+        <div className="space-y-2">
+          <Label>Store Voice For</Label>
+          <div className="flex gap-4">
+            <Button
+              variant={enrollmentLanguage === 'english' ? 'default' : 'outline'}
+              onClick={() => setEnrollmentLanguage('english')}
+              className="flex-1"
+            >
+              English
+            </Button>
+            <Button
+              variant={enrollmentLanguage === 'hindi' ? 'default' : 'outline'}
+              onClick={() => setEnrollmentLanguage('hindi')}
+              className="flex-1"
+            >
+              हिंदी (Hindi)
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {enrollmentLanguage === 'english' 
+              ? 'Voice will be available for English synthesis' 
+              : 'Voice will be available for Hindi synthesis'}
+          </p>
+        </div>
+
         {/* Voice Name Input */}
         <div className="space-y-2">
           <Label htmlFor="voice-name">Voice Name</Label>

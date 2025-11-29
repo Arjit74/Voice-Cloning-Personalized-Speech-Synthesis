@@ -58,30 +58,30 @@ export default function SpeechSynthesis({
   
   const { toast } = useToast();
 
+
   useEffect(() => {
     // Don't set default text - let user type their own
-    // Load voices from backend
+    // Load voices from backend when language changes
     loadVoices();
-  }, []);
+  }, [language]);
 
   const loadVoices = async () => {
     setIsLoadingVoices(true);
     try {
-      // Always fetch voices from English backend (main voice storage)
-      // Voices are shared across both backends
-      const data = await api.fetchVoices('english');
+      // Fetch voices from the selected language's backend
+      const data = await api.fetchVoices(language);
       const loadedVoices = data.voices.map((v: any) => ({
         id: v.id,
         name: v.name,
         audioUrl: v.path
       }));
       setVoices(loadedVoices);
-      console.log('Loaded voices from English backend:', loadedVoices);
+      console.log(`Loaded voices from ${language} backend:`, loadedVoices);
     } catch (error) {
       console.error('Failed to load voices:', error);
       toast({
         title: "Failed to load voices",
-        description: "Could not fetch voices from backend",
+        description: `Could not fetch voices from ${language} backend`,
         variant: "destructive"
       });
     } finally {
