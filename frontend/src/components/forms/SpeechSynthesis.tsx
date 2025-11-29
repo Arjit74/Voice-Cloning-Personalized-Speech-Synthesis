@@ -117,11 +117,18 @@ export default function SpeechSynthesis({
     setSynthesizerStartTime(Date.now()); // Record synthesis start time
 
     try {
+      // Auto-detect language from input text
+      const hindiRegex = /[\u0900-\u097F]/;
+      const hasHindi = hindiRegex.test(inputText);
+      const detectedLanguage = hasHindi ? 'hindi' : language;
+      
+      console.log(`Auto-detected language: ${detectedLanguage} (manual selection: ${language})`);
+      
       // Call backend API for synthesis with language support
-      const result = await api.synthesize(selectedVoice, inputText, language);
+      const result = await api.synthesize(selectedVoice, inputText, detectedLanguage);
       
       // Get the audio file URL from backend with cache busting
-      const audioUrl = api.getAudioUrl(result.audio_url) + `?t=${Date.now()}`;
+      const audioUrl = api.getAudioUrl(result.audio_url, detectedLanguage) + `?t=${Date.now()}`;
       
       // Extract filename from audio_url (e.g., "/api/audio/synthesis_abc123.wav" -> "synthesis_abc123.wav")
       const filename = result.audio_url.split('/').pop() || '';
