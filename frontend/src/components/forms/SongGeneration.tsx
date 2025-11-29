@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Upload, Music, Loader2 } from 'lucide-react'
+import api from '@/services/api'
 
 interface Voice {
   id: string
@@ -58,8 +59,6 @@ export const SongGeneration: React.FC<SongGenerationProps> = ({
     setSuccessMessage(null)
 
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-
       // Simulate progress
       const progressInterval = setInterval(() => {
         setProgress((prev) => Math.min(prev + 10, 90))
@@ -68,32 +67,28 @@ export const SongGeneration: React.FC<SongGenerationProps> = ({
       const formData = new FormData()
       formData.append('song', songFile)
       formData.append('voice_id', selectedVoice)
-      formData.append('language', language)
+      formData.append('language', 'english') // Song conversion always uses English backend
       formData.append('add_effects', addEffects ? 'true' : 'false')
 
       console.log('Converting song with:', {
         voice: selectedVoice,
-        language,
+        language: 'english',
         addEffects,
       })
 
-      const response = await fetch(`${API_BASE_URL}/api/convert_song`, {
-        method: 'POST',
-        body: formData,
-      })
+      // Use api service to route to English backend
+      const result = await api.convertSong(formData)
 
       clearInterval(progressInterval)
       setProgress(100)
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `Server error: ${response.status}`)
-      }
-
-      const result = await response.json()
-
-      if (result.success) {
-        const audioUrl = `${API_BASE_URL}${result.audio_url}`
+      if (result.status === 'success' || result.success) {
+        // Build full URL using English backend
+        const API_ENGLISH_URL = import.meta.env.VITE_API_URL_ENGLISH || 'https://aj50-voice-cloning-backend.hf.space'
+        const audioUrl = result.audio_url.startsWith('http') 
+          ? result.audio_url 
+          : `${API_ENGLISH_URL}${result.audio_url}`
+        
         setOutputAudio(audioUrl)
         setSuccessMessage('✅ Song converted successfully! Your voice is now in the song.')
         setSongFile(null)
@@ -103,7 +98,15 @@ export const SongGeneration: React.FC<SongGenerationProps> = ({
       }
     } catch (err) {
       console.error('Song conversion error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to convert song')
+      
+      let errorMessage = 'Failed to convert song'
+      if (err instanceof TypeError && err.message.includes('Failed to fetch')) {
+        errorMessage = '❌ Cannot connect to backend. Make sure no browser extension is blocking requests (try Incognito mode)'
+      } else if (err instanceof Error) {
+        errorMessage = err.message
+      }
+      
+      setError(errorMessage)
       setProgress(0)
     } finally {
       setIsConverting(false)

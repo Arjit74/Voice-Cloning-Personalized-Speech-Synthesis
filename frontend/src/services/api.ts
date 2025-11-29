@@ -4,8 +4,8 @@
  */
 
 // Get base URLs for each language
-const API_ENGLISH_URL = import.meta.env.VITE_API_URL_ENGLISH || 'http://localhost:5000';
-const API_HINDI_URL = import.meta.env.VITE_API_URL_HINDI || 'http://localhost:5001';
+const API_ENGLISH_URL = import.meta.env.VITE_API_URL_ENGLISH || 'https://aj50-voice-cloning-backend.hf.space';
+const API_HINDI_URL = import.meta.env.VITE_API_URL_HINDI || 'https://aj50-voice-cloning-hindi.hf.space';
 
 // Default fallback
 const API_BASE_URL = import.meta.env.VITE_API_URL || API_ENGLISH_URL;
@@ -105,6 +105,23 @@ export const api = {
       method: 'DELETE',
     });
     if (!response.ok) throw new Error('Failed to delete voice');
+    return response.json();
+  },
+
+  /**
+   * Convert song to use cloned voice
+   * Song conversion always uses English backend for Demucs processing
+   */
+  convertSong: async (formData: FormData) => {
+    // Song conversion is only available on English backend
+    const response = await fetch(api.getUrl('/convert_song', 'english'), {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to convert song');
+    }
     return response.json();
   },
 
