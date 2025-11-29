@@ -110,41 +110,26 @@ class MultilingualTTSService:
             print("[MultilingualTTSService] ✓ English vocoder loaded")
     
     def _load_hindi_models(self):
-        """Load Hindi Silero TTS model - natural neural voice."""
+        """Load Hindi models - using Google Text-to-Speech (gTTS)."""
         if self._xtts_model is None:
-            print("[MultilingualTTSService] Loading Hindi Silero TTS model...")
+            print("[MultilingualTTSService] Loading Hindi support (gTTS)...")
             try:
-                import torch
-                
-                # Load Silero TTS v3_en_indic model for Indic languages (includes Hindi)
-                # Returns (model, example_text) tuple
-                result = torch.hub.load(
-                    repo_or_dir='snakers4/silero-models',
-                    model='silero_tts',
-                    language='en',
-                    speaker='v3_en_indic',
-                    trust_repo=True
-                )
-                
-                if isinstance(result, tuple):
-                    self._xtts_model, _ = result
-                else:
-                    self._xtts_model = result
-                
-                print("[MultilingualTTSService] ✓ Hindi Silero TTS loaded successfully")
-                print("[MultilingualTTSService]   Engine: Silero TTS (Neural v3_en_indic)")
-                print("[MultilingualTTSService]   Language: Hindi (hindi_female speaker)")
-                print("[MultilingualTTSService]   Voice: Natural female voice")
-                print("[MultilingualTTSService]   TOS: No (Open source)")
+                from gtts import gTTS
+                print("[MultilingualTTSService] ✓ Hindi gTTS support loaded")
+                print("[MultilingualTTSService]   Engine: Google Text-to-Speech (gTTS)")
+                print("[MultilingualTTSService]   Language: Hindi (hin)")
+                print("[MultilingualTTSService]   TOS: No (Google Cloud)")
+                # Mark as loaded (gTTS doesn't require actual model loading)
+                self._xtts_model = True
                     
-            except ImportError as e:
+            except ImportError:
                 raise ImportError(
-                    "Torch required for Silero TTS. "
-                    "Install with: pip install torch"
+                    "gTTS library required for Hindi support. "
+                    "Install with: pip install gtts"
                 )
             except Exception as e:
-                print(f"[MultilingualTTSService] Error loading Silero TTS: {e}")
-                raise RuntimeError(f"Failed to load Hindi Silero model: {e}")
+                print(f"[MultilingualTTSService] Error loading Hindi support: {e}")
+                raise RuntimeError(f"Failed to load Hindi support: {e}")
     
     def synthesize(self, text: str, voice_sample_path: Union[str, Path],
                   language: str = "english") -> np.ndarray:
@@ -203,30 +188,41 @@ class MultilingualTTSService:
         return np.clip(synthesized, -1.0, 1.0)
     
     def _synthesize_hindi(self, text: str, voice_sample_path: Union[str, Path]) -> np.ndarray:
-        """Synthesize Hindi speech using Silero TTS neural model."""
+        """Synthesize Hindi speech using Google Text-to-Speech (gTTS)."""
         self._load_hindi_models()
         
         print(f"[MultilingualTTSService] Synthesizing Hindi: {text[:50]}...")
         
         try:
-            # Silero TTS returns Tensor directly
-            audio = self._xtts_model.apply_tts(
-                text=text,
-                speaker='hindi_female'
-            )
+            from gtts import gTTS
+            import io
+            from pydub import AudioSegment
             
-            # Convert Tensor to numpy
-            if isinstance(audio, torch.Tensor):
-                audio = audio.numpy()
+            # Generate speech using Google TTS
+            tts = gTTS(text=text, lang='hi', slow=False)
             
-            audio = np.asarray(audio, dtype=np.float32)
+            # Save to BytesIO buffer
+            buffer = io.BytesIO()
+            tts.write_to_fp(buffer)
+            buffer.seek(0)
             
-            # Normalize to [-1, 1] range (audio is in [-1, 1] from Silero already)
-            max_val = np.max(np.abs(audio))
-            if max_val > 1.0:
-                audio = audio / max_val
+            # Load audio from buffer
+            audio_segment = AudioSegment.from_mp3(buffer)
             
-            return np.clip(audio, -1.0, 1.0)
+            # Convert to numpy array (mono, float32)
+            samples = np.array(audio_segment.get_array_of_samples(), dtype=np.float32)
+            
+            # Handle stereo to mono conversion
+            if audio_segment.channels == 2:
+                # Convert stereo to mono by averaging channels
+                samples = samples.reshape((-1, 2)).mean(axis=1)
+            
+            # Normalize to [-1, 1] range
+            max_val = np.max(np.abs(samples))
+            if max_val > 0:
+                samples = samples / (32767.0 if audio_segment.sample_width == 2 else 128.0)
+            
+            return np.clip(samples, -1.0, 1.0)
             
         except Exception as e:
             print(f"[MultilingualTTSService] Error during Hindi synthesis: {e}")
