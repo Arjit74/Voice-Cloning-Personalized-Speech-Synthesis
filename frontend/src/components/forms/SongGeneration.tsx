@@ -83,11 +83,11 @@ export const SongGeneration: React.FC<SongGenerationProps> = ({
       setProgress(100)
 
       if (result.status === 'success' || result.success) {
-        // Build full URL using English backend
-        const API_ENGLISH_URL = import.meta.env.VITE_API_URL_ENGLISH || 'https://aj50-voice-cloning-backend.hf.space'
+        // Build full URL using Song Converter service
+        const API_SONG_CONVERTER_URL = import.meta.env.VITE_API_URL_SONG_CONVERTER || 'https://[username]-voice-cloning-song-converter.hf.space'
         const audioUrl = result.audio_url.startsWith('http') 
           ? result.audio_url 
-          : `${API_ENGLISH_URL}${result.audio_url}`
+          : `${API_SONG_CONVERTER_URL}${result.audio_url}`
         
         setOutputAudio(audioUrl)
         setSuccessMessage('✅ Song converted successfully! Your voice is now in the song.')

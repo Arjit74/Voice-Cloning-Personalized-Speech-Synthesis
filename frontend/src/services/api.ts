@@ -6,6 +6,7 @@
 // Get base URLs for each language
 const API_ENGLISH_URL = import.meta.env.VITE_API_URL_ENGLISH || 'https://aj50-voice-cloning-backend.hf.space';
 const API_HINDI_URL = import.meta.env.VITE_API_URL_HINDI || 'https://aj50-voice-cloning-hindi.hf.space';
+const API_SONG_CONVERTER_URL = import.meta.env.VITE_API_URL_SONG_CONVERTER || 'https://[username]-voice-cloning-song-converter.hf.space';
 
 // Default fallback
 const API_BASE_URL = import.meta.env.VITE_API_URL || API_ENGLISH_URL;
@@ -110,11 +111,14 @@ export const api = {
 
   /**
    * Convert song to use cloned voice
-   * Song conversion always uses English backend for Demucs processing
+   * Routes to dedicated Song Converter Service for Demucs processing
    */
   convertSong: async (formData: FormData) => {
-    // Song conversion is only available on English backend
-    const response = await fetch(api.getUrl('/convert_song', 'english'), {
+    // Song conversion is handled by dedicated Song Converter service
+    // Add main backend URL so it can fetch voice samples
+    formData.append('main_backend_url', API_ENGLISH_URL);
+    
+    const response = await fetch(`${API_SONG_CONVERTER_URL}/api/convert_song`, {
       method: 'POST',
       body: formData,
     });

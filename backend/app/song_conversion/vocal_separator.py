@@ -73,24 +73,32 @@ class VocalSeparator:
         sys.stdout.flush()
         
         # Perform separation using Demucs
+        # BagOfModels.separate() is the correct method for newer Demucs versions
         with torch.no_grad():
-            # Demucs model expects shape [batch, channels, samples]
-            # apply() returns a list of sources: [drums, bass, other, vocals]
-            sources = self.model.apply(wav_tensor)
+            # Use the correct Demucs API: separate() method on BagOfModels
+            stems = self.model.separate(wav_tensor)
         
-        # sources is a list: [drums, bass, other, vocals]
-        # We want vocals as the vocal track
-        if len(sources) >= 4:
-            vocals = sources[3].cpu().numpy().squeeze()  # vocals is at index 3
+        # stems is a dictionary: {'drums': ..., 'bass': ..., 'other': ..., 'vocals': ...}
+        # Extract vocals and combine other stems as instrumental
+        if isinstance(stems, dict):
+            vocals = stems.get('vocals', stems[list(stems.keys())[-1]]).cpu().numpy().squeeze()
             instrumental = np.zeros_like(wav)
-            for i in range(3):  # drums, bass, other
-                instrumental += sources[i].cpu().numpy().squeeze()
+            for key, stem in stems.items():
+                if key != 'vocals':
+                    instrumental += stem.cpu().numpy().squeeze()
         else:
-            # Fallback if source count differs
-            vocals = sources[-1].cpu().numpy().squeeze()
-            instrumental = np.zeros_like(wav)
-            for i in range(len(sources) - 1):
-                instrumental += sources[i].cpu().numpy().squeeze()
+            # Fallback for older API that returns list
+            if len(stems) >= 4:
+                vocals = stems[3].cpu().numpy().squeeze()  # vocals is at index 3
+                instrumental = np.zeros_like(wav)
+                for i in range(3):  # drums, bass, other
+                    instrumental += stems[i].cpu().numpy().squeeze()
+            else:
+                # Fallback if source count differs
+                vocals = stems[-1].cpu().numpy().squeeze()
+                instrumental = np.zeros_like(wav)
+                for i in range(len(stems) - 1):
+                    instrumental += stems[i].cpu().numpy().squeeze()
         
         print(f"[VocalSeparator] Separation complete")
         print(f"[VocalSeparator] Vocals shape: {vocals.shape}")
