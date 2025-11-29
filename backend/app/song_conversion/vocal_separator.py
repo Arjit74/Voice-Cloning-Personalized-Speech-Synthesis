@@ -72,21 +72,25 @@ class VocalSeparator:
         print(f"[VocalSeparator] Separating vocals and instrumental...")
         sys.stdout.flush()
         
-        # Perform separation
+        # Perform separation using Demucs
         with torch.no_grad():
-            sources = self.model.separate(wav_tensor)
+            # Demucs model expects shape [batch, channels, samples]
+            # apply() returns a list of sources: [drums, bass, other, vocals]
+            sources = self.model.apply(wav_tensor)
         
-        # Extract vocals and other sources
-        # sources dict typically has: 'drums', 'bass', 'other', 'vocals'
-        sources = {k: v.cpu().numpy().squeeze() for k, v in sources.items()}
-        
-        vocals = sources.get('vocals', np.zeros_like(wav))
-        
-        # Combine other sources as instrumental
-        instrumental = np.zeros_like(wav)
-        for key in sources:
-            if key != 'vocals':
-                instrumental += sources[key]
+        # sources is a list: [drums, bass, other, vocals]
+        # We want vocals as the vocal track
+        if len(sources) >= 4:
+            vocals = sources[3].cpu().numpy().squeeze()  # vocals is at index 3
+            instrumental = np.zeros_like(wav)
+            for i in range(3):  # drums, bass, other
+                instrumental += sources[i].cpu().numpy().squeeze()
+        else:
+            # Fallback if source count differs
+            vocals = sources[-1].cpu().numpy().squeeze()
+            instrumental = np.zeros_like(wav)
+            for i in range(len(sources) - 1):
+                instrumental += sources[i].cpu().numpy().squeeze()
         
         print(f"[VocalSeparator] Separation complete")
         print(f"[VocalSeparator] Vocals shape: {vocals.shape}")

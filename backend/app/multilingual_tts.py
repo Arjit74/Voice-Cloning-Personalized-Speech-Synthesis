@@ -1,4 +1,4 @@
-"""Multilingual TTS Service - Supports English (WaveRNN) and Hindi (gTTS)."""
+"""Multilingual TTS Service - Supports English (WaveRNN) and Hindi (XTTS)."""
 
 import os
 import sys
@@ -49,7 +49,7 @@ class MultilingualTTSService:
     Unified TTS service supporting multiple languages.
     
     - English: Uses existing WaveRNN vocoder + Tacotron2 synthesizer + encoder
-    - Hindi: Uses Google Text-to-Speech (gTTS) API
+    - Hindi: Uses XTTS (Coqui TTS) model
     """
     
     def __init__(self, models_dir: Path, hindi_model_dir: Optional[Path] = None):
@@ -74,9 +74,9 @@ class MultilingualTTSService:
         print("[MultilingualTTSService] Initialized")
         print(f"[MultilingualTTSService] English models dir: {self.models_dir}")
         if self.hindi_model_dir:
-            print(f"[MultilingualTTSService] Hindi support: ENABLED")
+            print(f"[MultilingualTTSService] Hindi XTTS dir: {self.hindi_model_dir}")
         else:
-            print("[MultilingualTTSService] Hindi support: ENABLED (using gTTS API)")
+            print("[MultilingualTTSService] Hindi support: DISABLED (no model path)")
     
     def _load_english_models(self):
         """Load English voice cloning models (lazy load)."""
@@ -110,26 +110,32 @@ class MultilingualTTSService:
             print("[MultilingualTTSService] ✓ English vocoder loaded")
     
     def _load_hindi_models(self):
-        """Load Hindi models - using Google Text-to-Speech (gTTS)."""
+        """Load Hindi XTTS model - supports voice cloning."""
         if self._xtts_model is None:
-            print("[MultilingualTTSService] Loading Hindi support (gTTS)...")
+            print("[MultilingualTTSService] Loading Hindi XTTS model...")
             try:
-                from gtts import gTTS
-                print("[MultilingualTTSService] ✓ Hindi gTTS support loaded")
-                print("[MultilingualTTSService]   Engine: Google Text-to-Speech (gTTS)")
-                print("[MultilingualTTSService]   Language: Hindi (hin)")
-                print("[MultilingualTTSService]   TOS: No (Google Cloud)")
-                # Mark as loaded (gTTS doesn't require actual model loading)
-                self._xtts_model = True
+                from TTS.api import TTS
+                
+                # XTTS v2: Multilingual TTS with voice cloning support
+                # Supports 13+ languages including Hindi
+                self._xtts_model = TTS(
+                    model_name="tts_models/multilingual/multi-dataset/xtts_v2",
+                    gpu=False,
+                    progress_bar=False
+                )
+                print("[MultilingualTTSService] ✓ Hindi XTTS v2 loaded successfully")
+                print("[MultilingualTTSService]   Model: XTTS v2 (Multilingual)")
+                print("[MultilingualTTSService]   Language: Hindi with voice cloning")
+                print("[MultilingualTTSService]   Voice Cloning: YES - uses enrolled voice")
                     
             except ImportError:
                 raise ImportError(
-                    "gTTS library required for Hindi support. "
-                    "Install with: pip install gtts"
+                    "TTS library required for Hindi support. "
+                    "Install with: pip install TTS>=0.21.0"
                 )
             except Exception as e:
-                print(f"[MultilingualTTSService] Error loading Hindi support: {e}")
-                raise RuntimeError(f"Failed to load Hindi support: {e}")
+                print(f"[MultilingualTTSService] Error loading Hindi XTTS: {e}")
+                raise RuntimeError(f"Failed to load Hindi XTTS model: {e}")
     
     def synthesize(self, text: str, voice_sample_path: Union[str, Path],
                   language: str = "english") -> np.ndarray:
@@ -188,41 +194,31 @@ class MultilingualTTSService:
         return np.clip(synthesized, -1.0, 1.0)
     
     def _synthesize_hindi(self, text: str, voice_sample_path: Union[str, Path]) -> np.ndarray:
-        """Synthesize Hindi speech using Google Text-to-Speech (gTTS)."""
+        """Synthesize Hindi speech using XTTS with voice cloning from enrolled voice."""
         self._load_hindi_models()
         
-        print(f"[MultilingualTTSService] Synthesizing Hindi: {text[:50]}...")
+        print(f"[MultilingualTTSService] Synthesizing Hindi with voice cloning: {text[:50]}...")
+        print(f"[MultilingualTTSService] Using voice sample: {voice_sample_path}")
         
         try:
-            from gtts import gTTS
-            import io
-            from pydub import AudioSegment
+            # XTTS supports voice cloning with speaker_wav parameter
+            # Language is detected automatically from text (Hindi Devanagari)
+            audio = self._xtts_model.tts(
+                text=text,
+                speaker_wav=str(voice_sample_path),  # Use enrolled voice characteristics
+                language="hi"  # Explicitly specify Hindi
+            )
             
-            # Generate speech using Google TTS
-            tts = gTTS(text=text, lang='hi', slow=False)
+            # Convert to numpy array
+            audio = np.asarray(audio, dtype=np.float32)
             
-            # Save to BytesIO buffer
-            buffer = io.BytesIO()
-            tts.write_to_fp(buffer)
-            buffer.seek(0)
-            
-            # Load audio from buffer
-            audio_segment = AudioSegment.from_mp3(buffer)
-            
-            # Convert to numpy array (mono, float32)
-            samples = np.array(audio_segment.get_array_of_samples(), dtype=np.float32)
-            
-            # Handle stereo to mono conversion
-            if audio_segment.channels == 2:
-                # Convert stereo to mono by averaging channels
-                samples = samples.reshape((-1, 2)).mean(axis=1)
-            
-            # Normalize to [-1, 1] range
-            max_val = np.max(np.abs(samples))
+            # Normalize
+            max_val = np.max(np.abs(audio))
             if max_val > 0:
-                samples = samples / (32767.0 if audio_segment.sample_width == 2 else 128.0)
+                target_level = 0.707
+                audio = audio * (target_level / max_val)
             
-            return np.clip(samples, -1.0, 1.0)
+            return np.clip(audio, -1.0, 1.0)
             
         except Exception as e:
             print(f"[MultilingualTTSService] Error during Hindi synthesis: {e}")
