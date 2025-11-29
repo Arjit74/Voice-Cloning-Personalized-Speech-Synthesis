@@ -67,14 +67,16 @@ export default function SpeechSynthesis({
   const loadVoices = async () => {
     setIsLoadingVoices(true);
     try {
-      const data = await api.fetchVoices();
+      // Always fetch voices from English backend (main voice storage)
+      // Voices are shared across both backends
+      const data = await api.fetchVoices('english');
       const loadedVoices = data.voices.map((v: any) => ({
         id: v.id,
         name: v.name,
         audioUrl: v.path
       }));
       setVoices(loadedVoices);
-      console.log('Loaded voices:', loadedVoices);
+      console.log('Loaded voices from English backend:', loadedVoices);
     } catch (error) {
       console.error('Failed to load voices:', error);
       toast({
